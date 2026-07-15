@@ -1,0 +1,10 @@
+# Only push the actual Apps Script project files to the server.
+# Local-only files (backup copies, client-side syntax checks, reference
+# decks, images, docs) must NOT be pushed — e.g. check_syntax.js and
+# Code_check.js contain browser code (window/document) that throws
+# "window is not defined" when run in the Apps Script server runtime.
+**/**
+
+!appsscript.json
+!Code.js
+!index.html
