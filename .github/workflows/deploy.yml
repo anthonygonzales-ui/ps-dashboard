@@ -1,0 +1,57 @@
+name: Deploy to Apps Script
+
+# Runs on every push to main. Pushes the code to your Apps Script project,
+# cuts a new immutable version, and repoints your existing deployment ID at it.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/**'
+
+# Never run two deploys at once (avoids racing versions/deployments).
+concurrency:
+  group: deploy-appsscript
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install clasp
+        run: npm install -g @google/clasp@3.3.0
+
+      - name: Write clasp credentials
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+
+      - name: Push code to Apps Script
+        run: clasp push -f
+
+      - name: Create new version
+        id: version
+        run: |
+          out=$(clasp create-version "CI deploy ${GITHUB_SHA::7}" 2>&1)
+          echo "$out"
+          ver=$(echo "$out" | grep -oiE 'version[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1)
+          if [ -z "$ver" ]; then
+            echo "Failed to parse version number from clasp output" >&2
+            exit 1
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "New version: $ver"
+
+      - name: Redeploy existing deployment
+        run: |
+          clasp redeploy AKfycbw1E_aAKDWebOac5DMcuDyU41YQ-hEh-1zUfGEvk8agGEtoDVVZwPEyadrXgqtktM5XuA \
+            -V "${{ steps.version.outputs.version }}" \
+            -d "CI deploy ${GITHUB_SHA::7}"

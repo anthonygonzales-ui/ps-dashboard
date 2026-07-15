@@ -2,8 +2,6 @@
 // PS Lifecycle Dashboard — Google Apps Script Backend
 // Spreadsheet: PS Lifecycle Dashboard
 // Spreadsheet ID: 1XVgzOgoQvEN1r1lRJemBVJx5xGB6FrruiKfiT7hhqWs
-// ------------------------------------------------------------
-// Test change: verifying automated deploy pipeline (deploy.ps1)
 // ============================================================
 
 const SPREADSHEET_ID = '1XVgzOgoQvEN1r1lRJemBVJx5xGB6FrruiKfiT7hhqWs';
