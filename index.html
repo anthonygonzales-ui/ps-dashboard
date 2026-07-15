@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2852,7 +2853,7 @@ function renderUtilization() {
 
   function fmtPct(v) {
     if (v === null || v === undefined) return '<span style="color:var(--text-dim)">—</span>';
-    var col = v >= 70 ? 'var(--green)' : v >= 55 ? 'var(--yellow)' : 'var(--red)';
+    var col = v >= 80 ? 'var(--green)' : v >= 60 ? 'var(--yellow)' : 'var(--red)';
     return '<span style="color:' + col + ';font-weight:600">' + Math.round(v) + '%</span>';
   }
   function fmtH(v) {
@@ -6317,4 +6318,4 @@ function buildBacklogPayload(fy, curQLabel, curQRange) {
 
 </script>
 </body>
-</html>               
+</html>
