@@ -1506,6 +1506,7 @@ function sendMissingTimecardEmails() {
       'Please log your remaining ' + missingDisplay + ' hour(s) in the timecard system at your earliest convenience.\n\n' +
       'If you have an approved exception or believe this message is in error, please reach out to ' +
       (managerName ? managerName : 'your manager') + ' directly.\n\n' +
+      'Note: The data used for this email could be up to 2 hours old.\n\n' +
       'Thank you,\nPS Operations';
 
     // HTML version — table-based layout required for Gmail dark background support
@@ -1558,6 +1559,7 @@ function sendMissingTimecardEmails() {
 
         // Footer
         '<tr><td align="center" style="padding:12px 0;">' +
+          '<p style="margin:0 0 4px;font-size:11px;color:#475569;font-family:Arial,sans-serif;">Note: The data used for this email could be up to 2 hours old.</p>' +
           '<p style="margin:0;font-size:11px;color:#475569;font-family:Arial,sans-serif;">This is an automated reminder. Please do not reply to this email.</p>' +
         '</td></tr>' +
 

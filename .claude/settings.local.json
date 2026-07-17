@@ -1,9 +1,27 @@
 {
   "permissions": {
+    "defaultMode": "acceptEdits",
     "allow": [
       "mcp__544dd990-9708-4c10-b3d5-ab917cd37faa__read_file_content",
       "mcp__544dd990-9708-4c10-b3d5-ab917cd37faa__download_file_content",
-      "mcp__544dd990-9708-4c10-b3d5-ab917cd37faa__search_files"
+      "mcp__544dd990-9708-4c10-b3d5-ab917cd37faa__search_files",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash(git *)",
+      "Bash(clasp *)",
+      "Bash(node *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(curl *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(rm *)",
+      "PowerShell"
     ]
   }
 }
