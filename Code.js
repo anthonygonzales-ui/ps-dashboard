@@ -1391,6 +1391,13 @@ function writeKPIsToSheet(kpiArray) {
  * Sends missing timecard reminder emails for the previous Mon–Sun week.
  * Called automatically by the Monday 9am trigger.
  */
+// Resources on an Israel (Sun–Thu) work week. Their 40-hour lookback uses a
+// Sunday–Saturday window instead of the standard Monday–Sunday. Emails must be
+// lowercase. Add more Israel-based resources here as needed.
+var ISRAEL_USERS = [
+  'asaf.hirshberg@redis.com'
+];
+
 function sendMissingTimecardEmails() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
@@ -1403,9 +1410,12 @@ function sendMissingTimecardEmails() {
     return;
   }
 
-  // ── Previous week: Monday–Sunday ───────────────────────────
-  // Always finds the last COMPLETED Mon–Sun week regardless of which day the script runs.
-  // e.g. run Monday Jul 13 → Jul 6–12; run Tuesday Jul 14 → still Jul 6–12.
+  // ── Previous completed week — two windows ──────────────────
+  // Standard (most resources): Monday–Sunday.
+  // Israel (Sun–Thu work week): the same window shifted back one day, i.e.
+  // Sunday–Saturday. e.g. for a Monday Jul 20 run: standard = Jul 13–19,
+  // Israel = Jul 12–18.
+  // Always finds the last COMPLETED week regardless of which day the script runs.
   var today = new Date(); today.setHours(0,0,0,0);
   var dow = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
   var daysToLastSun = (dow === 0) ? 7 : dow; // days back to the most recent Sunday
@@ -1414,12 +1424,20 @@ function sendMissingTimecardEmails() {
   prevMon.setHours(0,0,0,0);
   prevSun.setHours(23,59,59,999);
 
+  // Israel window = standard window shifted back one day (Sunday–Saturday)
+  var ilStart = new Date(prevMon); ilStart.setDate(prevMon.getDate() - 1); ilStart.setHours(0,0,0,0);
+  var ilEnd   = new Date(prevSun); ilEnd.setDate(prevSun.getDate() - 1);   ilEnd.setHours(23,59,59,999);
+
   function fmtDate(d) {
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   }
-  var weekRange = fmtDate(prevMon) + ' – ' + fmtDate(new Date(prevSun.getFullYear(), prevSun.getMonth(), prevSun.getDate()));
+  function rangeStr(a, b) {
+    return fmtDate(a) + ' – ' + fmtDate(new Date(b.getFullYear(), b.getMonth(), b.getDate()));
+  }
+  var stdWeekRange = rangeStr(prevMon, prevSun);
+  var ilWeekRange  = rangeStr(ilStart, ilEnd);
 
-  // ── Build hours-per-person map for the previous week ────────
+  // ── Build hours-per-person maps for both windows ────────────
   var hData = hoursSheet.getDataRange().getValues();
   var hHdrs = hData[0].map(String);
   var iHN = hHdrs.indexOf('Work: Owner Name');
@@ -1432,7 +1450,7 @@ function sendMissingTimecardEmails() {
     return;
   }
 
-  var hoursMap = {};
+  var stdHoursMap = {}, ilHoursMap = {};
   for (var hi = 1; hi < hData.length; hi++) {
     var hr = hData[hi];
     var hName = String(hr[iHN] || '').trim().toLowerCase();
@@ -1444,9 +1462,9 @@ function sendMissingTimecardEmails() {
     var hd = (rawD instanceof Date) ? new Date(rawD) : new Date(String(rawD).trim());
     if (isNaN(hd)) continue;
     hd.setHours(0,0,0,0);
-    if (hd < prevMon || hd > prevSun) continue;
     var hrs = parseFloat(hr[iHH]) || 0;
-    hoursMap[hName] = (hoursMap[hName] || 0) + hrs;
+    if (hd >= prevMon && hd <= prevSun) stdHoursMap[hName] = (stdHoursMap[hName] || 0) + hrs;
+    if (hd >= ilStart && hd <= ilEnd)   ilHoursMap[hName]  = (ilHoursMap[hName]  || 0) + hrs;
   }
 
   // ── Read user records and send emails ───────────────────────
@@ -1485,7 +1503,12 @@ function sendMissingTimecardEmails() {
       }
     }
 
-    var logged = hoursMap[name.toLowerCase()] || 0;
+    // Israel-based resources use the Sunday–Saturday window; everyone else Mon–Sun.
+    var isIsrael    = ISRAEL_USERS.indexOf(email.toLowerCase()) >= 0;
+    var weekRange   = isIsrael ? ilWeekRange : stdWeekRange;
+    var windowStart = isIsrael ? ilStart : prevMon;
+
+    var logged = (isIsrael ? ilHoursMap : stdHoursMap)[name.toLowerCase()] || 0;
     if (logged >= 40) continue; // timecard complete — no email needed
 
     var loggedDisplay = (logged % 1 === 0) ? String(logged) : logged.toFixed(1);
@@ -1494,7 +1517,7 @@ function sendMissingTimecardEmails() {
     var missing = (40 - logged);
     var missingDisplay = (missing % 1 === 0) ? String(missing) : missing.toFixed(1);
 
-    var subject = 'Reminder: Incomplete Timecard for the Week of ' + fmtDate(prevMon);
+    var subject = 'Reminder: Incomplete Timecard for the Week of ' + fmtDate(windowStart);
 
     // Plain-text fallback (for email clients that don't render HTML)
     var body =
