@@ -2918,15 +2918,14 @@ function renderUtilization() {
     var wBody = document.getElementById('ut-weekly-body');
     if (!wHead || !wBody) return;
 
-    // Build list of Monday-anchored weeks that overlap the period
-    function weekMonday(d) {
-      var m = new Date(d); m.setHours(0,0,0,0);
-      var day = m.getDay();
-      m.setDate(m.getDate() - (day === 0 ? 6 : day - 1));
-      return m;
+    // Build list of Sunday-anchored weeks (Sun–Sat) that overlap the period
+    function weekSunday(d) {
+      var s = new Date(d); s.setHours(0,0,0,0);
+      s.setDate(s.getDate() - s.getDay()); // getDay(): Sun=0 → back to the week's Sunday
+      return s;
     }
     var weeks = [];
-    var ws = weekMonday(periodStart);
+    var ws = weekSunday(periodStart);
     while (ws <= periodEnd) {
       var we = new Date(ws); we.setDate(we.getDate() + 6); we.setHours(23,59,59,999);
       weeks.push({ start: new Date(ws), end: we });

@@ -1410,23 +1410,22 @@ function sendMissingTimecardEmails() {
     return;
   }
 
-  // ── Previous completed week — two windows ──────────────────
-  // Standard (most resources): Monday–Sunday.
-  // Israel (Sun–Thu work week): the same window shifted back one day, i.e.
-  // Sunday–Saturday. e.g. for a Monday Jul 20 run: standard = Jul 13–19,
-  // Israel = Jul 12–18.
-  // Always finds the last COMPLETED week regardless of which day the script runs.
+  // ── Previous completed week: Sunday–Saturday ───────────────
+  // The timecard week runs Sunday–Saturday for ALL resources. Finds the last
+  // COMPLETED Sun–Sat week regardless of which day the script runs.
+  // e.g. for a Monday Jul 27 run → Jul 19–25.
   var today = new Date(); today.setHours(0,0,0,0);
   var dow = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-  var daysToLastSun = (dow === 0) ? 7 : dow; // days back to the most recent Sunday
-  var prevSun = new Date(today); prevSun.setDate(today.getDate() - daysToLastSun);
-  var prevMon = new Date(prevSun); prevMon.setDate(prevSun.getDate() - 6);
-  prevMon.setHours(0,0,0,0);
-  prevSun.setHours(23,59,59,999);
+  var daysToLastSat = ((dow + 1) % 7) || 7; // days back to the most recent completed Saturday
+  var wkEnd = new Date(today); wkEnd.setDate(today.getDate() - daysToLastSat);
+  var wkStart = new Date(wkEnd); wkStart.setDate(wkEnd.getDate() - 6);
+  wkStart.setHours(0,0,0,0);
+  wkEnd.setHours(23,59,59,999);
 
-  // Israel window = standard window shifted back one day (Sunday–Saturday)
-  var ilStart = new Date(prevMon); ilStart.setDate(prevMon.getDate() - 1); ilStart.setHours(0,0,0,0);
-  var ilEnd   = new Date(prevSun); ilEnd.setDate(prevSun.getDate() - 1);   ilEnd.setHours(23,59,59,999);
+  // Israel-based resources (ISRAEL_USERS) also use Sunday–Saturday, so their
+  // window is currently identical to everyone else's. Kept as its own pair so
+  // the two can diverge again later without a refactor.
+  var ilStart = new Date(wkStart), ilEnd = new Date(wkEnd);
 
   function fmtDate(d) {
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -1434,7 +1433,7 @@ function sendMissingTimecardEmails() {
   function rangeStr(a, b) {
     return fmtDate(a) + ' – ' + fmtDate(new Date(b.getFullYear(), b.getMonth(), b.getDate()));
   }
-  var stdWeekRange = rangeStr(prevMon, prevSun);
+  var stdWeekRange = rangeStr(wkStart, wkEnd);
   var ilWeekRange  = rangeStr(ilStart, ilEnd);
 
   // ── Build hours-per-person maps for both windows ────────────
@@ -1463,8 +1462,8 @@ function sendMissingTimecardEmails() {
     if (isNaN(hd)) continue;
     hd.setHours(0,0,0,0);
     var hrs = parseFloat(hr[iHH]) || 0;
-    if (hd >= prevMon && hd <= prevSun) stdHoursMap[hName] = (stdHoursMap[hName] || 0) + hrs;
-    if (hd >= ilStart && hd <= ilEnd)   ilHoursMap[hName]  = (ilHoursMap[hName]  || 0) + hrs;
+    if (hd >= wkStart && hd <= wkEnd) stdHoursMap[hName] = (stdHoursMap[hName] || 0) + hrs;
+    if (hd >= ilStart && hd <= ilEnd) ilHoursMap[hName]  = (ilHoursMap[hName]  || 0) + hrs;
   }
 
   // ── Read user records and send emails ───────────────────────
@@ -1506,7 +1505,7 @@ function sendMissingTimecardEmails() {
     // Israel-based resources use the Sunday–Saturday window; everyone else Mon–Sun.
     var isIsrael    = ISRAEL_USERS.indexOf(email.toLowerCase()) >= 0;
     var weekRange   = isIsrael ? ilWeekRange : stdWeekRange;
-    var windowStart = isIsrael ? ilStart : prevMon;
+    var windowStart = isIsrael ? ilStart : wkStart;
 
     var logged = (isIsrael ? ilHoursMap : stdHoursMap)[name.toLowerCase()] || 0;
     if (logged >= 40) continue; // timecard complete — no email needed
