@@ -672,17 +672,18 @@ function generateSlidesDeck(payloadJson) {
   try {
     var p = JSON.parse(payloadJson);
 
-    // ── Color constants (white theme) ───────────────────────
-    var BG     = '#FFFFFF';
-    var CARD   = '#F5F5F5';
-    var CARD2  = '#EBEBEB';
-    var RED    = '#FF4438';
-    var TEXT   = '#1A1A2E';
-    var MUTED  = '#595959';
-    var DIM    = '#AAAAAA';
-    var GREEN  = '#107C41';
-    var YELLOW = '#C27C0E';
-    var BLUE   = '#1565C0';
+    // ── Color constants (Redis brand — white theme) ─────────
+    // Palette per Redis 2026 brand: Hyper red, Midnight, Dusk, Dusk 30%.
+    var BG     = '#FFFFFF';   // White
+    var CARD   = '#F4F6F7';   // subtle Dusk-tinted surface
+    var CARD2  = '#E7ECEE';
+    var RED    = '#FF4438';   // Hyper (Redis red)
+    var TEXT   = '#091A23';   // Midnight
+    var MUTED  = '#163341';   // Dusk
+    var DIM    = '#B9C2C6';   // Dusk 30%
+    var GREEN  = '#107C41';   // functional status (good) — kept for legibility
+    var YELLOW = '#C27C0E';   // functional status (warn)
+    var BLUE   = '#1565C0';   // functional status (info)
     // Paste your base64-encoded Redis logo PNG here (no data: prefix, just the raw base64 string).
     // Leave empty to render footers without the logo image.
     var REDIS_LOGO_B64 = '';
@@ -721,7 +722,7 @@ function generateSlidesDeck(payloadJson) {
       tb.getFill().setTransparent();
       tb.getBorder().setTransparent();
       var ts = tb.getText().getTextStyle();
-      ts.setFontFamily('Arial');
+      ts.setFontFamily('Space Grotesk');
       ts.setFontSize(opts.size || 11);
       ts.setForegroundColor(opts.color || TEXT);
       if (opts.bold)   ts.setBold(true);
@@ -770,7 +771,7 @@ function generateSlidesDeck(payloadJson) {
         hc.getFill().setSolidFill(RED);
         var ht = hc.getText();
         ht.setText(String(hdrs[c]));
-        ht.getTextStyle().setFontFamily('Arial').setFontSize(7.5).setForegroundColor('#FFFFFF').setBold(true);
+        ht.getTextStyle().setFontFamily('Space Grotesk').setFontSize(7.5).setForegroundColor('#FFFFFF').setBold(true);
         var rightAlign  = opts.rightCols  && opts.rightCols.indexOf(c)  > -1;
         var centerAlign = opts.centerCols && opts.centerCols.indexOf(c) > -1;
         if (ht.getParagraphs().length > 0)
@@ -789,7 +790,7 @@ function generateSlidesDeck(payloadJson) {
           var cellStr = (val === null || val === undefined) ? '—' : String(val);
           var dt = dc.getText();
           dt.setText(cellStr);
-          dt.getTextStyle().setFontFamily('Arial').setFontSize(opts.fontSize || 7.5).setForegroundColor(TEXT);
+          dt.getTextStyle().setFontFamily('Space Grotesk').setFontSize(opts.fontSize || 7.5).setForegroundColor(TEXT);
           var rightAlign2  = opts.rightCols  && opts.rightCols.indexOf(c2)  > -1;
           var centerAlign2 = opts.centerCols && opts.centerCols.indexOf(c2) > -1;
           if (dt.getParagraphs().length > 0)
@@ -825,7 +826,7 @@ function generateSlidesDeck(payloadJson) {
     logo.getFill().setSolidFill(RED);
     logo.getBorder().setTransparent();
     logo.getText().setText('PS');
-    logo.getText().getTextStyle().setFontFamily('Arial').setFontSize(22).setForegroundColor('#FFFFFF').setBold(true);
+    logo.getText().getTextStyle().setFontFamily('Space Grotesk').setFontSize(22).setForegroundColor('#FFFFFF').setBold(true);
     logo.setContentAlignment(SlidesApp.ContentAlignment.MIDDLE);
     if (logo.getText().getParagraphs().length > 0)
       logo.getText().getParagraphs()[0].getRange().getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
@@ -848,7 +849,7 @@ function generateSlidesDeck(payloadJson) {
         ph.getFill().setSolidFill(CARD);
         ph.getBorder().setTransparent();
         ph.getText().setText('⚠  Visit this tab in the dashboard before generating the deck.');
-        ph.getText().getTextStyle().setFontFamily('Arial').setFontSize(11).setForegroundColor(YELLOW);
+        ph.getText().getTextStyle().setFontFamily('Space Grotesk').setFontSize(11).setForegroundColor(YELLOW);
         ph.setContentAlignment(SlidesApp.ContentAlignment.MIDDLE);
         if (ph.getText().getParagraphs().length > 0)
           ph.getText().getParagraphs()[0].getRange().getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
@@ -864,7 +865,7 @@ function generateSlidesDeck(payloadJson) {
         ph2.getFill().setSolidFill(CARD);
         ph2.getBorder().setTransparent();
         ph2.getText().setText('⚠  Screenshot data is invalid. Re-open this tab in the dashboard and regenerate.');
-        ph2.getText().getTextStyle().setFontFamily('Arial').setFontSize(11).setForegroundColor(YELLOW);
+        ph2.getText().getTextStyle().setFontFamily('Space Grotesk').setFontSize(11).setForegroundColor(YELLOW);
         ph2.setContentAlignment(SlidesApp.ContentAlignment.MIDDLE);
         if (ph2.getText().getParagraphs().length > 0)
           ph2.getText().getParagraphs()[0].getRange().getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
@@ -878,7 +879,7 @@ function generateSlidesDeck(payloadJson) {
       line.setWeight(1);
       line.setDashStyle(SlidesApp.DashStyle.DOT);
       var tb = slide.insertTextBox('1:\n2:\n3:', PAD, yTop + 5, CW, 44);
-      tb.getText().getTextStyle().setFontFamily('Arial').setFontSize(9).setForegroundColor(MUTED);
+      tb.getText().getTextStyle().setFontFamily('Space Grotesk').setFontSize(9).setForegroundColor(MUTED);
     }
 
     // ── Helper: slide footer (red rule + Redis logo) ─────────────────────────
@@ -952,10 +953,10 @@ function generateSlidesDeck(payloadJson) {
     var xMax3  = Math.ceil(maxTot3 / 5) * 5;
     var xStep3 = xMax3 <= 50 ? 5 : 10;
 
-    // Tier colour palette — light → dark indigo/purple
-    var TCOL3 = ['#C5CAE9', '#7986CB', '#3949AB', '#1A237E', '#9E9E9E', '#6D4C41'];
-    // Data-label text colour per tier (dark on light Tier 1, white on all others)
-    var TLAB3 = ['#3949AB', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'];
+    // Tier colour palette — Redis brand accents (Sky Blue, Purple, Hyper, Dusk, Midnight)
+    var TCOL3 = ['#80DBFF', '#C795E3', '#FF4438', '#163341', '#091A23', '#B9C2C6'];
+    // Data-label text colour per tier (Midnight on light fills, white on dark fills)
+    var TLAB3 = ['#091A23', '#091A23', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#091A23'];
 
     // ── Vertical grid lines + x-axis labels ──
     for (var xi3 = 0; xi3 <= xMax3; xi3 += xStep3) {
@@ -1346,7 +1347,7 @@ function generateSlidesDeck(payloadJson) {
     ph.getFill().setSolidFill(CARD);
     ph.getBorder().setTransparent();
     ph.getText().setText('[ Paste P&L screenshot here ]');
-    ph.getText().getTextStyle().setFontFamily('Arial').setFontSize(14).setForegroundColor(DIM).setItalic(true);
+    ph.getText().getTextStyle().setFontFamily('Space Grotesk').setFontSize(14).setForegroundColor(DIM).setItalic(true);
     ph.setContentAlignment(SlidesApp.ContentAlignment.MIDDLE);
     if (ph.getText().getParagraphs().length > 0)
       ph.getText().getParagraphs()[0].getRange().getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
