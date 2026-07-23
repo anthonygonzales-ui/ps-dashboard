@@ -962,6 +962,7 @@ var TA_FILTER_MANAGER = 'All'; // active manager filter for Team Availability
 var TA_VIEW_MODE      = 'week'; // 'week' | 'day'
 var CALENDAR_LOADING = false; // prevents duplicate in-flight requests
 var HOURS_LOADING    = false; // prevents duplicate in-flight requests for hours data
+var GL_SUMMARY       = [];    // per-fiscal-period go-live summary (populated by renderGoLives; used by deck slide 3)
 var GL_OPEN_QUARTERS = {};   // safeId → boolean; persists expanded state across filter changes
 
 var TAB_META = {
@@ -1916,6 +1917,18 @@ function renderGoLives() {
 
   var sorted = Object.entries(groups).sort(function (a, b) {
     return a[1].key - b[1].key;
+  });
+
+  // Expose per-period summary for the deck's native Go Live slide (slide 3)
+  GL_SUMMARY = sorted.map(function (e) {
+    var g = e[1];
+    return {
+      fiscalPeriod: e[0],
+      total:        g.total,
+      live:         g.live,
+      remaining:    g.total - g.live,
+      pctComplete:  g.total > 0 ? Math.round(g.live / g.total * 100) : 0
+    };
   });
 
   if (sorted.length === 0) {
@@ -5739,6 +5752,26 @@ async function captureEl(elementId) {
   return canvas.toDataURL('image/png').split(',')[1];
 }
 
+// Outline the Consultant Load (col 12) and EM Load (col 14) columns in the
+// backlog table — used only during deck screenshot capture so the red boxes
+// appear on slide 9 without altering the live dashboard.
+function deckHighlightBacklogCols(on) {
+  var table = document.getElementById('ba-table');
+  if (!table) return;
+  var TARGET = [12, 14]; // 0-based cell index: Consultant Load, EM Load
+  var rows = table.querySelectorAll('tr');
+  rows.forEach(function(tr, rIdx) {
+    TARGET.forEach(function(ci) {
+      var cell = tr.children[ci];
+      if (!cell) return;
+      cell.style.borderLeft  = on ? '2px solid #FF4438' : '';
+      cell.style.borderRight = on ? '2px solid #FF4438' : '';
+      cell.style.borderTop    = (on && rIdx === 0) ? '2px solid #FF4438' : '';
+      cell.style.borderBottom = (on && rIdx === rows.length - 1) ? '2px solid #FF4438' : '';
+    });
+  });
+}
+
 async function captureDeckScreenshots(fy) {
   var shots = {};
   var origTab = CUR_TAB;
@@ -5868,8 +5901,11 @@ async function captureDeckScreenshots(fy) {
     await deckDelay(200);
     var baFyEl = document.getElementById('ba-fy');
     if (baFyEl && parseInt(baFyEl.value,10) !== fy) { baFyEl.value = String(fy); renderBacklogAnalysis(); await deckDelay(200); }
+    deckHighlightBacklogCols(true);
+    await deckDelay(50);
     shots.slide9 = await captureEl('ba-tbl-area');
   } catch(e) { console.warn('Deck slide9 capture:', e); }
+  finally { deckHighlightBacklogCols(false); }
 
   switchTab(origTab);
   return shots;
@@ -5897,6 +5933,7 @@ async function buildDeckPayload() {
     utilization:      buildUtilizationPayload(curQLabel, curQRange),
     bookingsForecast: buildBookingsPayload(fy),
     backlogAnalysis:  buildBacklogPayload(fy, curQLabel, curQRange),
+    goLive:           { rows: GL_SUMMARY },
     screenshots:      screenshots,
   };
 }

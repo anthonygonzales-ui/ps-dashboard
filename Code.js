@@ -1021,13 +1021,72 @@ function generateSlidesDeck(payloadJson) {
     footer(s3);
 
 
-    // ── SLIDE 4: GO LIVES (screenshot) ───────────────────────
+    // ── SLIDE 4 (renders as slide 3): GO LIVE SUMMARY (native) ──
+    // Custom-built (not a screenshot): fiscal period, total projects, a
+    // progress bar (% live), and remaining count + %. No summary cards, no
+    // avg-days-to-go-live column.
     _deckSection = 'slide4-go-lives';
     var s4 = pres.appendSlide();
     setBg(s4);
-    titleBar(s4, 'Go Live Summary', p.generatedDate);
-    insertShot(s4, (p.screenshots || {}).slide4, 110, COMMENT_H);
-    commentaryArea(s4, H - COMMENT_H);
+    titleBar(s4, 'Go live summary', p.generatedDate);
+
+    var glRows = (p.goLive && p.goLive.rows) ? p.goLive.rows : [];
+    if (!glRows.length) {
+      txt(s4, 'No go live data available for this period.', PAD, 120, CW, 24, { size: 12, color: MUTED });
+    } else {
+      // Column geometry
+      var glX0   = PAD,             glWfp  = 150;   // Fiscal period
+      var glXtot = glX0 + glWfp,    glWtot = 96;    // Total projects
+      var glXbar = glXtot + glWtot, glWbar = 260;   // Progress
+      var glXrem = glXbar + glWbar + 8;
+      var glWrem = W - PAD - glXrem;                // Remaining
+
+      // Header row
+      var glHeadY = 82;
+      txt(s4, 'Fiscal period',  glX0,   glHeadY, glWfp,  14, { size: 9, bold: true, color: MUTED });
+      txt(s4, 'Total projects', glXtot, glHeadY, glWtot, 14, { size: 9, bold: true, color: MUTED, align: 'center' });
+      txt(s4, 'Progress',       glXbar, glHeadY, glWbar, 14, { size: 9, bold: true, color: MUTED });
+      txt(s4, 'Remaining',      glXrem, glHeadY, glWrem, 14, { size: 9, bold: true, color: MUTED, align: 'right' });
+      bar(s4, glHeadY + 16);
+
+      var glTop   = glHeadY + 24;
+      var glAvail = (H - 24) - glTop;
+      var nGl     = glRows.length;
+      var glGap   = 8;
+      var glRowH  = Math.max(26, Math.min(46, Math.floor((glAvail - glGap * (nGl - 1)) / nGl)));
+
+      glRows.forEach(function(r, ri) {
+        var ry     = glTop + ri * (glRowH + glGap);
+        var total  = r.total || 0;
+        var live   = (r.live != null) ? r.live : 0;
+        var rem    = (r.remaining != null) ? r.remaining : (total - live);
+        var pctC   = (r.pctComplete != null) ? r.pctComplete : (total > 0 ? Math.round(live / total * 100) : 0);
+        var remPct = total > 0 ? Math.round(rem / total * 100) : 0;
+
+        txt(s4, r.fiscalPeriod || '—', glX0,   ry, glWfp,  glRowH, { size: 12, bold: true, color: TEXT });
+        txt(s4, String(total),         glXtot, ry, glWtot, glRowH, { size: 12, color: TEXT, align: 'center' });
+
+        // Progress: "NN%" label + track + red fill
+        var pctLblW = 34;
+        txt(s4, pctC + '%', glXbar, ry, pctLblW, glRowH, { size: 10, bold: true, color: TEXT, align: 'right' });
+        var trkX  = glXbar + pctLblW + 8;
+        var trkW  = (glXbar + glWbar) - trkX;
+        var barY  = ry + Math.floor(glRowH / 2) - 5;
+        var track = rect(s4, trkX, barY, trkW, 10, CARD2); track.getObjectId();
+        var fillW = Math.max(2, Math.round(trkW * pctC / 100));
+        var fill  = rect(s4, trkX, barY, fillW, 10, RED);  fill.getObjectId();
+
+        txt(s4, rem + ' (' + remPct + '%)', glXrem, ry, glWrem, glRowH,
+            { size: 12, bold: true, color: rem > 0 ? RED : GREEN, align: 'right' });
+
+        if (ri < nGl - 1) {
+          var dv = s4.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD, ry + glRowH + Math.floor(glGap / 2), CW, 0.5);
+          dv.getObjectId();
+          dv.getFill().setSolidFill('#E7ECEE');
+          dv.getBorder().setTransparent();
+        }
+      });
+    }
     footer(s4);
 
 
