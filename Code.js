@@ -747,11 +747,6 @@ function generateSlidesDeck(payloadJson) {
     function titleBar(slide, mainTitle, sub) {
       txt(slide, mainTitle, PAD, 10, CW, 34, { size: 18, bold: true });
       if (sub) txt(slide, sub, PAD, 44, CW, 16, { size: 9, color: MUTED });
-      // Redis brand tick: short Hyper-red accent underline (replaces full-width bar)
-      var _acc = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD, 62, 48, 3);
-      _acc.getObjectId();
-      _acc.getFill().setSolidFill(RED);
-      _acc.getBorder().setTransparent();
     }
 
     // ── Helper: insert data table ────────────────────────────
@@ -894,18 +889,6 @@ function generateSlidesDeck(payloadJson) {
 
     // ── Helper: slide footer (red rule + Redis logo) ─────────────────────────
     function footer(slide) {
-      // 1-px red rule across the very bottom of the slide
-      var rule = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, 0, H - 14, W, 1);
-      rule.getFill().setSolidFill(RED);
-      rule.getBorder().setTransparent();
-      // CRITICAL flush: commit the rule shape in its own batch before any
-      // subsequent insertTextBox (on this slide or the next) runs.  If the
-      // rule's INSERT shares a batch with a later insertTextBox, GAS can
-      // mis-resolve the textbox's provisional handle to this Rectangle,
-      // causing its RED fill to be applied to the textbox instead of the
-      // rule — leaving the rule with a transparent/default fill (invisible).
-      rule.getObjectId();
-
       if (REDIS_LOGO_B64) {
         var imgData = Utilities.base64Decode(REDIS_LOGO_B64);
         var blob    = Utilities.newBlob(imgData, 'image/png', 'redis-logo.png');
