@@ -684,9 +684,9 @@ function generateSlidesDeck(payloadJson) {
     var GREEN  = '#107C41';   // functional status (good) — kept for legibility
     var YELLOW = '#C27C0E';   // functional status (warn)
     var BLUE   = '#1565C0';   // functional status (info)
-    // Paste your base64-encoded Redis logo PNG here (no data: prefix, just the raw base64 string).
-    // Leave empty to render footers without the logo image.
-    var REDIS_LOGO_B64 = '';
+    // Redis wordmark (Hyper red, transparent) from the official Redis 2026
+    // template, defined in RedisAssets.js. Falls back to empty if absent.
+    var REDIS_LOGO_B64 = (typeof REDIS_LOGO_WORDMARK !== 'undefined') ? REDIS_LOGO_WORDMARK : '';
 
 
     // ── Slide geometry (points) ──────────────────────────────
@@ -747,7 +747,11 @@ function generateSlidesDeck(payloadJson) {
     function titleBar(slide, mainTitle, sub) {
       txt(slide, mainTitle, PAD, 10, CW, 34, { size: 18, bold: true });
       if (sub) txt(slide, sub, PAD, 44, CW, 16, { size: 9, color: MUTED });
-      bar(slide, 62);
+      // Redis brand tick: short Hyper-red accent underline (replaces full-width bar)
+      var _acc = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD, 62, 48, 3);
+      _acc.getObjectId();
+      _acc.getFill().setSolidFill(RED);
+      _acc.getBorder().setTransparent();
     }
 
     // ── Helper: insert data table ────────────────────────────
@@ -813,27 +817,33 @@ function generateSlidesDeck(payloadJson) {
     var pres = SlidesApp.create('PS Monthly Review — ' + p.generatedDate);
     var COMMENT_H = 70; // reserved height at bottom for commentary lines
 
-    // ── SLIDE 1: TITLE ───────────────────────────────────────
+    // ── SLIDE 1: TITLE (Redis 2026 template — Midnight executive) ──
+    // Full-bleed Midnight background, Redis wordmark top-left, large white
+    // title, presenter line + date bottom-left. Geometry mirrors the template
+    // title layout (1 in = 72 pt on this 720×405 pt canvas).
     _deckSection = 'slide1-title';
     var s1 = pres.getSlides()[0];
-    // Remove default title/subtitle placeholder shapes
     s1.getPageElements().forEach(function(el) { el.remove(); });
-    setBg(s1);
-    bar(s1, H * 0.38);
-    bar(s1, H * 0.62);
+    s1.getBackground().setSolidFill('#091A23'); // Midnight full-bleed
 
-    var logo = s1.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD, H * 0.38 + 12, 56, 56);
-    logo.getFill().setSolidFill(RED);
-    logo.getBorder().setTransparent();
-    logo.getText().setText('PS');
-    logo.getText().getTextStyle().setFontFamily('Space Grotesk').setFontSize(22).setForegroundColor('#FFFFFF').setBold(true);
-    logo.setContentAlignment(SlidesApp.ContentAlignment.MIDDLE);
-    if (logo.getText().getParagraphs().length > 0)
-      logo.getText().getParagraphs()[0].getRange().getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
+    // Redis wordmark top-left (template: 0.33in, 0.41in @ 1.89×0.59in)
+    if (REDIS_LOGO_B64) {
+      try {
+        var tlBlob = Utilities.newBlob(Utilities.base64Decode(REDIS_LOGO_B64), 'image/png', 'redis.png');
+        s1.insertImage(tlBlob, 24, 30, 136, 42).getObjectId();
+      } catch (e) { Logger.log('title logo: ' + e); }
+    }
 
-    txt(s1, 'PS Monthly Review', PAD + 66, H * 0.38 + 10, CW - 66, 38, { size: 28, bold: true });
-    txt(s1, 'Redis Professional Services  •  ' + p.generatedDate, PAD + 66, H * 0.38 + 50, CW - 66, 18, { size: 11, color: MUTED });
-    footer(s1);
+    // Short Hyper-red accent above the title
+    var tAcc = s1.insertShape(SlidesApp.ShapeType.RECTANGLE, 24, 138, 60, 4);
+    tAcc.getObjectId();
+    tAcc.getFill().setSolidFill(RED);
+    tAcc.getBorder().setTransparent();
+
+    // Title + presenter/date (left-aligned, template placeholder positions)
+    txt(s1, 'PS Monthly Review', 24, 150, 520, 70, { size: 36, bold: true, color: '#FFFFFF', vAlign: 'top' });
+    txt(s1, 'Redis Professional Services', 24, 279, 400, 22, { size: 13, color: '#FFFFFF', vAlign: 'top' });
+    txt(s1, p.generatedDate, 24, 301, 400, 20, { size: 12, color: DIM, vAlign: 'top' });
 
 
     // ── Helper: insert screenshot image ─────────────────────
@@ -899,7 +909,7 @@ function generateSlidesDeck(payloadJson) {
       if (REDIS_LOGO_B64) {
         var imgData = Utilities.base64Decode(REDIS_LOGO_B64);
         var blob    = Utilities.newBlob(imgData, 'image/png', 'redis-logo.png');
-        var img     = slide.insertImage(blob, W - PAD - 56, H - 13, 56, 11);
+        var img     = slide.insertImage(blob, PAD, H - 13, 32, 10);
         // Same flush requirement for the image: keeps it out of the next
         // slide's titleBar batch, preventing "has no text" on the Image element.
         img.getObjectId();
