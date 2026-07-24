@@ -5988,34 +5988,37 @@ function buildLookbackPayload(qLabel, fy, utilPayload) {
              t: bfParseNum(BOOKINGS[useFY + '_' + useQ + '_' + reg + '_target']) };
   }
 
-  // ── Attach (New+Upsell) + Service deals (PS) per geo for a quarter ──
+  // ── Attach (dollar-based, unfiltered) + Service deals (PS) per geo for a quarter ──
+  // Attach rate = sum(PS Total Price) / sum(New ARR), all record types — matches the Attach Rates tab.
   function attachDeals(fpKey) {
-    var res = {}; GEOS.forEach(function (g) { res[g] = { all: {}, ps: {}, opps: {} }; });
+    var res = {}; GEOS.forEach(function (g) { res[g] = { psPrice: 0, totalARR: 0, opps: {} }; });
     var s = SHEETS.attachRates; if (!s) return res;
     var iFP = hi(s,'Fiscal Period'); if (iFP < 0) iFP = hi(s,'Close Fiscal Period');
     var iRg = hi(s,'Account Team Region'); if (iRg < 0) iRg = hi(s,'Region');
-    var iRec = hi(s,'Opportunity Record Type'); if (iRec < 0) iRec = hi(s,'Record Type');
     var iPF = hi(s,'Product Family');
     var iAc = hi(s,'Account'); if (iAc < 0) iAc = hi(s,'Account Name');
     var iOp = hi(s,'Opportunity ID'); if (iOp < 0) iOp = hi(s,'Opportunity: ID'); if (iOp < 0) iOp = hi(s,'Opportunity Name');
+    var iAR = hi(s,'New ARR'); if (iAR < 0) iAR = hi(s,'New ARR (converted)'); if (iAR < 0) iAR = hi(s,'Net New ARR');
+    var iTP = hi(s,'Total Price (converted)'); if (iTP < 0) iTP = hi(s,'Total Price'); if (iTP < 0) iTP = hi(s,'Sales Price'); if (iTP < 0) iTP = hi(s,'Amount');
+    var seenARR = {};
     s.data.forEach(function (r) {
       if (_lbParseFPKey(r[iFP]) !== fpKey) return;
       var g = _lbGeo(r[iRg]); if (!g || !res[g]) return;
-      var dt = String(r[iRec] || '').trim().replace(/^\d+\.\s*/, '').toLowerCase();
-      var newOrUp = dt === 'new customer' || dt.indexOf('upsell') > -1;
       var pf = String(r[iPF] || '').toLowerCase().trim();
-      var isPS = pf === 'services - professional services' || pf.indexOf('professional services') > -1;
+      var isPS = pf === 'services - professional services' || pf.indexOf('professional services') > -1 || pf === 'ps';
       var acct = String(r[iAc] || '').trim();
       var opp = String(r[iOp] || '').trim() || (acct + '|' + fpKey);
-      if (isPS) res[g].opps[opp] = 1;                          // service deals: unique PS opps
-      if (acct) { res[g].all[acct] = 1; if (isPS) res[g].ps[acct] = 1; } // attach base — aggregate, ALL record types
+      var newARR = iAR >= 0 ? (parseFloat(String(r[iAR] || '').replace(/[,$]/g, '')) || 0) : 0;
+      var totPrice = iTP >= 0 ? (parseFloat(String(r[iTP] || '').replace(/[,$]/g, '')) || 0) : 0;
+      if (newARR > 0 && !seenARR[opp]) { seenARR[opp] = true; res[g].totalARR += newARR; } // New ARR deduped per opp
+      if (isPS) { if (totPrice > 0) res[g].psPrice += totPrice; res[g].opps[opp] = 1; } // service deals: unique PS opps
     });
     return res;
   }
   var curAD = attachDeals(curKey), prevAD = attachDeals(prevKey);
-  function rate(c) { var t = Object.keys(c.all).length; return t ? Math.round(Object.keys(c.ps).length / t * 100) : 0; }
+  function rate(c) { return c.totalARR > 0 ? Math.round(c.psPrice / c.totalARR * 100) : 0; }
   function ndeals(c) { return Object.keys(c.opps).length; }
-  function merge(ad) { var m = { all:{}, ps:{}, opps:{} }; GEOS.forEach(function(g){ Object.keys(ad[g].all).forEach(function(k){m.all[k]=1;}); Object.keys(ad[g].ps).forEach(function(k){m.ps[k]=1;}); Object.keys(ad[g].opps).forEach(function(k){m.opps[k]=1;}); }); return m; }
+  function merge(ad) { var m = { psPrice: 0, totalARR: 0, opps: {} }; GEOS.forEach(function(g){ m.psPrice += ad[g].psPrice; m.totalARR += ad[g].totalARR; Object.keys(ad[g].opps).forEach(function(k){ m.opps[k] = 1; }); }); return m; }
 
   // ── Utilization per geo (from util payload) ──
   var util = {};

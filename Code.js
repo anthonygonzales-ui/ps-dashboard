@@ -922,7 +922,7 @@ function generateSlidesDeck(payloadJson) {
       // Column headers — centered, 10pt
       var headY = 74, headH = 34;
       cols.forEach(function(c) {
-        txt(sLB, c.h, c.x, headY, c.w, headH, { size: 10, bold: true, color: MUTED, align: 'center', vAlign: 'top' });
+        txt(sLB, c.h, c.x, headY, c.w, headH, { size: 8, bold: true, color: MUTED, align: 'center', vAlign: 'top' });
       });
       var divY = headY + headH + 2;
       var dv = sLB.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD, divY, CW, 0.75);
@@ -1115,10 +1115,10 @@ function generateSlidesDeck(payloadJson) {
       bar(s4, glHeadY + 16);
 
       var glTop   = glHeadY + 24;
-      var glAvail = (H - 24) - glTop;
+      var glAvail = (H - COMMENT_H - 10) - glTop;   // reserve space for commentary
       var nGl     = glRows.length;
       var glGap   = 8;
-      var glRowH  = Math.max(26, Math.min(46, Math.floor((glAvail - glGap * (nGl - 1)) / nGl)));
+      var glRowH  = Math.max(20, Math.min(30, Math.floor((glAvail - glGap * (nGl - 1)) / nGl)));
 
       glRows.forEach(function(r, ri) {
         var ry     = glTop + ri * (glRowH + glGap);
@@ -1133,7 +1133,7 @@ function generateSlidesDeck(payloadJson) {
 
         // Progress: "NN%" label + track + red fill
         var pctLblW = 34;
-        txt(s4, pctC + '%', glXbar, ry, pctLblW, glRowH, { size: 10, bold: true, color: TEXT, align: 'right' });
+        txt(s4, pctC + '%', glXbar, ry, pctLblW, glRowH, { size: 9, bold: true, color: TEXT, align: 'right' });
         var trkX  = glXbar + pctLblW + 8;
         var trkW  = (glXbar + glWbar) - trkX;
         var barY  = ry + Math.floor(glRowH / 2) - 5;
@@ -1152,6 +1152,7 @@ function generateSlidesDeck(payloadJson) {
         }
       });
     }
+    commentaryArea(s4, H - COMMENT_H);
     footer(s4);
 
 
