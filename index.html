@@ -963,6 +963,9 @@ var TA_VIEW_MODE      = 'week'; // 'week' | 'day'
 var CALENDAR_LOADING = false; // prevents duplicate in-flight requests
 var HOURS_LOADING    = false; // prevents duplicate in-flight requests for hours data
 var GL_SUMMARY       = [];    // per-fiscal-period go-live summary (populated by renderGoLives; used by deck slide 3)
+// Per-person utilization targets (%). Default 70; these four are 50.
+var UTIL_TARGETS     = { 'ken miller': 50, 'taha najar': 50, 'kevin shah': 50, 'kumar venkatasubramanian': 50 };
+function utilTargetFor(name) { return UTIL_TARGETS[String(name || '').trim().toLowerCase()] || 70; }
 var GL_OPEN_QUARTERS = {};   // safeId → boolean; persists expanded state across filter changes
 
 var TAB_META = {
@@ -2869,6 +2872,18 @@ function renderUtilization() {
     var col = v >= 80 ? 'var(--green)' : v >= 60 ? 'var(--yellow)' : 'var(--red)';
     return '<span style="color:' + col + ';font-weight:600">' + Math.round(v) + '%</span>';
   }
+  // Billable / PTO-adjusted util vs the person's target:
+  // >= target green; within 15 pts below yellow; more than 15 pts below red.
+  function fmtPctT(v, target) {
+    if (v === null || v === undefined) return '<span style="color:var(--text-dim)">—</span>';
+    var col = v >= target ? 'var(--green)' : (v >= target - 15 ? 'var(--yellow)' : 'var(--red)');
+    return '<span style="color:' + col + ';font-weight:600">' + Math.round(v) + '%</span>';
+  }
+  // Total utilization — always white.
+  function fmtPctWhite(v) {
+    if (v === null || v === undefined) return '<span style="color:var(--text-dim)">—</span>';
+    return '<span style="color:#FFFFFF;font-weight:600">' + Math.round(v) + '%</span>';
+  }
   function fmtH(v) {
     if (v === null || v === undefined) return '<span style="color:var(--text-dim)">—</span>';
     if (v === 0) return '<span style="color:var(--text-dim)">0</span>';
@@ -2876,6 +2891,7 @@ function renderUtilization() {
   }
 
   el.innerHTML = rows.map(function(e, idx) {
+    var tgt = utilTargetFor(e.resource);
     var rampBadge = e.rampStatus === 'Ramping'
       ? '<span style="background:#FFA72618;color:#FFA726;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px">Ramping</span>'
       : e.rampStatus === 'Ramped'
@@ -2917,10 +2933,10 @@ function renderUtilization() {
       '<td>' + esc(e.manager)   + '</td>' +
       '<td>' + esc(e.region)    + '</td>' +
       '<td style="text-align:right">'  + fmtH(e.billableHrs)  + '</td>' +
-      '<td style="text-align:center">' + fmtPct(e.billUtil)   + '</td>' +
-      '<td style="text-align:center">' + fmtPct(e.ptoAdjUtil) + '</td>' +
-      '<td style="text-align:center">' + fmtPct(e.totalUtil)  + '</td>' +
-      '<td style="text-align:center"><span style="color:var(--text-dim);font-weight:600">70%</span></td>' +
+      '<td style="text-align:center">' + fmtPctT(e.billUtil, tgt)   + '</td>' +
+      '<td style="text-align:center">' + fmtPctT(e.ptoAdjUtil, tgt) + '</td>' +
+      '<td style="text-align:center">' + fmtPctWhite(e.totalUtil)   + '</td>' +
+      '<td style="text-align:center"><span style="color:var(--text-dim);font-weight:600">' + tgt + '%</span></td>' +
       '<td style="text-align:right">'  + fmtH(e.workingHrs)   + '</td>' +
     '</tr>' + detailHtml;
   }).join('');
@@ -2983,7 +2999,9 @@ function renderUtilization() {
 
     // Build week totals for every resource first, then filter to only those
     // with at least one week below that week's expected hours
-    var rowsWithTotals = rows.map(function(e) {
+    var rowsWithTotals = rows.filter(function(e) {
+      return e.rampStatus !== 'Ramping';   // exclude ramping resources from Missing Timecards
+    }).map(function(e) {
       var nameKey = e.resource.toLowerCase();
       var allRows = hoursMap[nameKey] || [];
 
