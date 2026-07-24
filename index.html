@@ -897,6 +897,9 @@ th { position: relative; }
 
     <!-- body: password entry -->
     <div id="deck-modal-body">
+      <label style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:6px">Fiscal period</label>
+      <select id="deck-fp"
+        style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:13px;outline:none;margin-bottom:12px"></select>
       <label style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:6px">Password</label>
       <input id="deck-pw" type="password" placeholder="Enter password…"
         style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:13px;outline:none;margin-bottom:6px"
@@ -5700,6 +5703,24 @@ function showDeckModal() {
   document.getElementById('deck-modal-error').style.display      = 'none';
   document.getElementById('deck-pw-err').style.display           = 'none';
   document.getElementById('deck-pw').value = '';
+
+  // Populate the fiscal-period picker (current quarter + last 7), current selected
+  var sel = document.getElementById('deck-fp');
+  if (sel) {
+    var cur = getFQLabel(new Date());              // e.g. "Q3-2027"
+    var cq = parseInt(cur.split('-')[0].replace('Q',''), 10);
+    var cy = parseInt(cur.split('-')[1], 10);
+    var opts = '';
+    for (var i = 0; i < 8; i++) {
+      var q = cq - i, y = cy;
+      while (q <= 0) { q += 4; y -= 1; }
+      var lbl = 'Q' + q + '-' + y;
+      opts += '<option value="' + lbl + '"' + (i === 0 ? ' selected' : '') +
+              '>Q' + q + ' FY' + y + (i === 0 ? ' (current)' : '') + '</option>';
+    }
+    sel.innerHTML = opts;
+  }
+
   setTimeout(function(){ document.getElementById('deck-pw').focus(); }, 60);
 }
 
@@ -5932,10 +5953,12 @@ async function captureDeckScreenshots(fy) {
 // ── Main payload assembler (async) ───────────────────────────
 async function buildDeckPayload() {
   var today = new Date(); today.setHours(0,0,0,0);
-  var curQLabel = getFQLabel(today);
+  // Deck reporting quarter comes from the fiscal-period picker (falls back to current)
+  var fpEl = document.getElementById('deck-fp');
+  var curQLabel = (fpEl && fpEl.value) ? fpEl.value : getFQLabel(today);
   var curQRange = getFQRange(curQLabel);
-  var fyEl = document.getElementById('bf-fy');
-  var fy = fyEl ? parseInt(fyEl.value, 10) : (today.getMonth() === 0 ? today.getFullYear() : today.getFullYear() + 1);
+  var fy = parseInt((curQLabel.split('-')[1] || '').replace(/\D/g, ''), 10) ||
+           (today.getMonth() === 0 ? today.getFullYear() : today.getFullYear() + 1);
   var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   var generatedDate = months[today.getMonth()] + ' ' + today.getDate() + ', ' + today.getFullYear();
 
@@ -6075,6 +6098,8 @@ function buildUtilizationPayload(curQLabel, curQRange) {
   var today0    = new Date(); today0.setHours(0,0,0,0);
   var periodStart = curQRange.start;
   var periodEnd   = priorWeekSaturday(today0);
+  // For a past/selected quarter, don't run past the quarter end
+  if (curQRange.end && periodEnd > curQRange.end) periodEnd = new Date(curQRange.end);
   if (periodEnd < periodStart) periodEnd = new Date(periodStart);
 
   var hs = SHEETS.hoursData;
