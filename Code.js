@@ -912,17 +912,17 @@ function generateSlidesDeck(payloadJson) {
 
     (function() {
       var cols = [
-        { x: 28,  w: 86,  h: 'Region',                              a: 'left'   },
-        { x: 118, w: 116, h: 'Service bookings /\nattainment %',     a: 'center' },
-        { x: 234, w: 108, h: 'Attach rate\n(New + Upsell / QoQ %)',  a: 'center' },
-        { x: 342, w: 92,  h: 'Service deals /\nQoQ %',               a: 'center' },
-        { x: 434, w: 142, h: 'Billable util (ramped) /\nPTO adjusted', a: 'center' },
-        { x: 576, w: 116, h: 'Project backlog\n(# not started)',     a: 'center' }
+        { x: 28,  w: 90,  h: 'Region' },
+        { x: 118, w: 116, h: 'Service bookings /\nattainment %' },
+        { x: 234, w: 108, h: 'Attach rate\n(New + Upsell / QoQ %)' },
+        { x: 342, w: 92,  h: 'Service deals /\nQoQ %' },
+        { x: 434, w: 142, h: 'Billable util (ramped) /\nPTO adjusted' },
+        { x: 576, w: 116, h: 'Project backlog\n(# not started)' }
       ];
-      var headY = 78, headH = 30;
+      // Column headers — centered, 10pt
+      var headY = 74, headH = 34;
       cols.forEach(function(c) {
-        txt(sLB, c.h, c.x, headY, c.w, headH,
-            { size: 8, bold: true, color: MUTED, align: c.a === 'left' ? undefined : 'center', vAlign: 'top' });
+        txt(sLB, c.h, c.x, headY, c.w, headH, { size: 10, bold: true, color: MUTED, align: 'center', vAlign: 'top' });
       });
       var divY = headY + headH + 2;
       var dv = sLB.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD, divY, CW, 0.75);
@@ -932,13 +932,27 @@ function generateSlidesDeck(payloadJson) {
       if (lb.total) allRows.push(lb.total);
       if (!allRows.length) {
         txt(sLB, 'No data available for this period.', PAD, divY + 20, CW, 24, { size: 12, color: MUTED });
+        commentaryArea(sLB, H - COMMENT_H);
         return;
       }
-      var top = divY + 8;
-      var avail = (H - 26) - top;
-      var n = allRows.length;
-      var gap = 6;
-      var rowH = Math.max(30, Math.min(52, Math.floor((avail - gap * (n - 1)) / n)));
+
+      // Smaller table — reserve COMMENT_H at the bottom for commentary
+      var top   = divY + 10;
+      var avail = (H - COMMENT_H - 10) - top;
+      var n     = allRows.length;
+      var gap   = 5;
+      var rowH  = Math.max(22, Math.min(34, Math.floor((avail - gap * (n - 1)) / n)));
+
+      // Gray shading + red border around the region-label column (data regions only)
+      var nReg = lb.total ? allRows.length - 1 : allRows.length;
+      if (nReg > 0) {
+        var blkH = (nReg - 1) * (rowH + gap) + rowH + 6;
+        var blk  = sLB.insertShape(SlidesApp.ShapeType.RECTANGLE, 22, top - 3, 96, blkH);
+        blk.getObjectId();
+        blk.getFill().setSolidFill('#F1EFE8');
+        blk.getBorder().setWeight(1.5);
+        blk.getBorder().getLineFill().setSolidFill(RED);
+      }
 
       allRows.forEach(function(r, ri) {
         var ry = top + ri * (rowH + gap);
@@ -951,9 +965,12 @@ function generateSlidesDeck(payloadJson) {
         cols.forEach(function(c, ci) {
           txt(sLB, vals[ci] || '—', c.x, ry, c.w, rowH,
               { size: ci === 0 ? 12 : 11, bold: (ci === 0 || isTotal), color: TEXT,
-                align: c.a === 'left' ? undefined : 'center' });
+                align: ci === 0 ? undefined : 'center' });
         });
       });
+
+      // Slide-7-style commentary: red dotted line + 1:/2:/3: bullets
+      commentaryArea(sLB, H - COMMENT_H);
     })();
     footer(sLB);
 

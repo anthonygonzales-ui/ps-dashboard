@@ -21,7 +21,19 @@
       "Bash(mkdir *)",
       "Bash(cp *)",
       "Bash(rm *)",
-      "PowerShell"
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "PowerShell",
+      "PowerShell(git *)"
+    ]
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "PowerShell(git *)"
     ]
   }
 }

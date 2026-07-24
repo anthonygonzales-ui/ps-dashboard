@@ -6008,7 +6008,7 @@ function buildLookbackPayload(qLabel, fy, utilPayload) {
       var acct = String(r[iAc] || '').trim();
       var opp = String(r[iOp] || '').trim() || (acct + '|' + fpKey);
       if (isPS) res[g].opps[opp] = 1;                          // service deals: unique PS opps
-      if (newOrUp && acct) { res[g].all[acct] = 1; if (isPS) res[g].ps[acct] = 1; } // attach base
+      if (acct) { res[g].all[acct] = 1; if (isPS) res[g].ps[acct] = 1; } // attach base — aggregate, ALL record types
     });
     return res;
   }
