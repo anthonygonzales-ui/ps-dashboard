@@ -903,6 +903,61 @@ function generateSlidesDeck(payloadJson) {
 
 
 
+    // ── SLIDE 2 (rendered): LOOKING BACK (region × metric table) ──
+    _deckSection = 'slide2-lookback';
+    var sLB = pres.appendSlide();
+    setBg(sLB);
+    var lb = p.lookback || { rows: [], total: null, quarterLabel: '' };
+    titleBar(sLB, 'Looking back: ' + (lb.quarterLabel || ''), '');
+
+    (function() {
+      var cols = [
+        { x: 28,  w: 86,  h: 'Region',                              a: 'left'   },
+        { x: 118, w: 116, h: 'Service bookings /\nattainment %',     a: 'center' },
+        { x: 234, w: 108, h: 'Attach rate\n(New + Upsell / QoQ %)',  a: 'center' },
+        { x: 342, w: 92,  h: 'Service deals /\nQoQ %',               a: 'center' },
+        { x: 434, w: 142, h: 'Billable util (ramped) /\nPTO adjusted', a: 'center' },
+        { x: 576, w: 116, h: 'Project backlog\n(# not started)',     a: 'center' }
+      ];
+      var headY = 78, headH = 30;
+      cols.forEach(function(c) {
+        txt(sLB, c.h, c.x, headY, c.w, headH,
+            { size: 8, bold: true, color: MUTED, align: c.a === 'left' ? undefined : 'center', vAlign: 'top' });
+      });
+      var divY = headY + headH + 2;
+      var dv = sLB.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD, divY, CW, 0.75);
+      dv.getObjectId(); dv.getFill().setSolidFill('#B9C2C6'); dv.getBorder().setTransparent();
+
+      var allRows = lb.rows.slice();
+      if (lb.total) allRows.push(lb.total);
+      if (!allRows.length) {
+        txt(sLB, 'No data available for this period.', PAD, divY + 20, CW, 24, { size: 12, color: MUTED });
+        return;
+      }
+      var top = divY + 8;
+      var avail = (H - 26) - top;
+      var n = allRows.length;
+      var gap = 6;
+      var rowH = Math.max(30, Math.min(52, Math.floor((avail - gap * (n - 1)) / n)));
+
+      allRows.forEach(function(r, ri) {
+        var ry = top + ri * (rowH + gap);
+        var isTotal = !!lb.total && ri === allRows.length - 1;
+        if (isTotal) {
+          var bgs = sLB.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD, ry - 2, CW, rowH + 4);
+          bgs.getObjectId(); bgs.getFill().setSolidFill('#F1EFE8'); bgs.getBorder().setTransparent();
+        }
+        var vals = [r.region, r.bookings, r.attach, r.deals, r.util, r.backlog];
+        cols.forEach(function(c, ci) {
+          txt(sLB, vals[ci] || '—', c.x, ry, c.w, rowH,
+              { size: ci === 0 ? 12 : 11, bold: (ci === 0 || isTotal), color: TEXT,
+                align: c.a === 'left' ? undefined : 'center' });
+        });
+      });
+    })();
+    footer(sLB);
+
+
     // ── SLIDE 3: PROJECTS BY TIER & OWNER (horizontal stacked bar chart) ──
     _deckSection = 'slide3-tier-owner';
     var s3 = pres.appendSlide();

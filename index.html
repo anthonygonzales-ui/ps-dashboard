@@ -5950,6 +5950,127 @@ async function captureDeckScreenshots(fy) {
   return shots;
 }
 
+// ── "Looking Back" slide payload (region × metric for the selected quarter) ──
+// Region normaliser → AMER / EMEA / APAC
+function _lbGeo(region) {
+  var r = String(region || '').toLowerCase().trim();
+  if (!r) return null;
+  if (r === 'amer' || r.indexOf('americ') > -1 || r.indexOf('north america') > -1 ||
+      r.indexOf('latam') > -1 || r.indexOf('latin') > -1 || r.indexOf('canada') > -1) return 'AMER';
+  if (r === 'emea' || r.indexOf('emea') > -1 || r.indexOf('europe') > -1 ||
+      r.indexOf('middle east') > -1 || r.indexOf('africa') > -1) return 'EMEA';
+  if (r === 'apac' || r === 'apj' || r.indexOf('apac') > -1 || r.indexOf('asia') > -1 ||
+      r.indexOf('pacific') > -1 || r.indexOf('australia') > -1 ||
+      r.indexOf('india') > -1 || r.indexOf('japan') > -1) return 'APAC';
+  return null;
+}
+function _lbParseFPKey(raw) {
+  var s2 = String(raw || '').trim(), qn, fyn, m;
+  m = s2.match(/Q(\d)\s*[-–]?\s*FY\s*(\d{2,4})/i); if (m) { qn = +m[1]; fyn = +m[2]; }
+  if (!m) { m = s2.match(/FY\s*(\d{2,4})\s*[-–]?\s*Q(\d)/i); if (m) { fyn = +m[1]; qn = +m[2]; } }
+  if (!m) { m = s2.match(/Q(\d)\s*[-–\s]\s*(\d{4})/i);        if (m) { qn = +m[1]; fyn = +m[2]; } }
+  if (!m) { m = s2.match(/Q(\d)\s*[-–\s]\s*(\d{2})$/i);       if (m) { qn = +m[1]; fyn = +m[2]; } }
+  if (!qn || !fyn) return null;
+  if (fyn < 100) fyn += 2000;
+  return fyn + '_Q' + qn;
+}
+function buildLookbackPayload(qLabel, fy, utilPayload) {
+  var GEOS = ['AMER', 'EMEA', 'APAC'];
+  var curQ = qLabel.split('-')[0];                       // "Q1"
+  var curKey = qLabel.split('-')[1] + '_' + curQ;        // "2027_Q1"
+  var pq = (function () { var q = +curQ.replace('Q',''), y = +qLabel.split('-')[1]; q -= 1; if (q < 1) { q = 4; y -= 1; } return { q: 'Q'+q, y: y }; })();
+  var prevKey = pq.y + '_' + pq.q;
+  var prevFY = pq.y, prevQ = pq.q;
+
+  // ── Bookings actuals + attainment (from BOOKINGS global) ──
+  function book(reg, useFY, useQ) {
+    return { a: bfParseNum(BOOKINGS[useFY + '_' + useQ + '_' + reg + '_actuals']),
+             t: bfParseNum(BOOKINGS[useFY + '_' + useQ + '_' + reg + '_target']) };
+  }
+
+  // ── Attach (New+Upsell) + Service deals (PS) per geo for a quarter ──
+  function attachDeals(fpKey) {
+    var res = {}; GEOS.forEach(function (g) { res[g] = { all: {}, ps: {}, opps: {} }; });
+    var s = SHEETS.attachRates; if (!s) return res;
+    var iFP = hi(s,'Fiscal Period'); if (iFP < 0) iFP = hi(s,'Close Fiscal Period');
+    var iRg = hi(s,'Account Team Region'); if (iRg < 0) iRg = hi(s,'Region');
+    var iRec = hi(s,'Opportunity Record Type'); if (iRec < 0) iRec = hi(s,'Record Type');
+    var iPF = hi(s,'Product Family');
+    var iAc = hi(s,'Account'); if (iAc < 0) iAc = hi(s,'Account Name');
+    var iOp = hi(s,'Opportunity ID'); if (iOp < 0) iOp = hi(s,'Opportunity: ID'); if (iOp < 0) iOp = hi(s,'Opportunity Name');
+    s.data.forEach(function (r) {
+      if (_lbParseFPKey(r[iFP]) !== fpKey) return;
+      var g = _lbGeo(r[iRg]); if (!g || !res[g]) return;
+      var dt = String(r[iRec] || '').trim().replace(/^\d+\.\s*/, '').toLowerCase();
+      var newOrUp = dt === 'new customer' || dt.indexOf('upsell') > -1;
+      var pf = String(r[iPF] || '').toLowerCase().trim();
+      var isPS = pf === 'services - professional services' || pf.indexOf('professional services') > -1;
+      var acct = String(r[iAc] || '').trim();
+      var opp = String(r[iOp] || '').trim() || (acct + '|' + fpKey);
+      if (isPS) res[g].opps[opp] = 1;                          // service deals: unique PS opps
+      if (newOrUp && acct) { res[g].all[acct] = 1; if (isPS) res[g].ps[acct] = 1; } // attach base
+    });
+    return res;
+  }
+  var curAD = attachDeals(curKey), prevAD = attachDeals(prevKey);
+  function rate(c) { var t = Object.keys(c.all).length; return t ? Math.round(Object.keys(c.ps).length / t * 100) : 0; }
+  function ndeals(c) { return Object.keys(c.opps).length; }
+  function merge(ad) { var m = { all:{}, ps:{}, opps:{} }; GEOS.forEach(function(g){ Object.keys(ad[g].all).forEach(function(k){m.all[k]=1;}); Object.keys(ad[g].ps).forEach(function(k){m.ps[k]=1;}); Object.keys(ad[g].opps).forEach(function(k){m.opps[k]=1;}); }); return m; }
+
+  // ── Utilization per geo (from util payload) ──
+  var util = {};
+  if (utilPayload && utilPayload.regionSummary) {
+    utilPayload.regionSummary.forEach(function (rs) { var g = _lbGeo(rs.region); if (g && !util[g]) util[g] = { bill: rs.billable, pto: rs.ptoAdj }; });
+  }
+  var utilTot = (utilPayload && utilPayload.globalSummary) ? { bill: utilPayload.globalSummary.billable, pto: utilPayload.globalSummary.ptoAdj } : { bill:'—', pto:'—' };
+
+  // ── Backlog per geo (open projects; not-started = Awaiting Handoff + Kickoff) ──
+  var bl = {}; GEOS.forEach(function (g) { bl[g] = { open: 0, ns: 0 }; });
+  (function () {
+    var s = SHEETS.activeProjects; if (!s) return;
+    var iRg = hi(s,'Region');
+    var iOH = hi(s,'On Hold'), iHO = hi(s,'Sales to PS Handoff Date'), iKO = hi(s,'Project Kickoff Date'),
+        iEn = hi(s,'Entered Hours'), iGL = hi(s,'Actual Go Live Date'), iOT = hi(s,'Opportunity: Opportunity Record Type');
+    s.data.forEach(function (r) {
+      var g = _lbGeo(r[iRg]); if (!g || !bl[g]) return;
+      bl[g].open++;
+      var st = computeStage(r, iOH, iHO, iKO, iEn, iGL, iOT);
+      if (st === 'Awaiting Handoff' || st === 'Awaiting Kickoff') bl[g].ns++;
+    });
+  })();
+
+  // ── Formatters ──
+  function money(v) { if (v == null) return '—'; return '$' + (Math.round(v / 1e5) / 10).toFixed(2) + 'M'; }
+  function att(a, t) { return (t ? Math.round((a || 0) / t * 100) : 0) + '%'; }
+  function qpct(cur, prev) { if (!prev) return '—'; return (Math.round((cur - prev) / prev * 1000) / 10) + '%'; }
+  function ppt(cur, prev) { return (Math.round((cur - prev) * 10) / 10) + '%'; } // simple point change
+
+  function mkRow(label, bA, bT, adCur, adPrev, u, backOpen, backNs) {
+    return {
+      region:   label,
+      bookings: money(bA) + ' / ' + att(bA, bT),
+      attach:   rate(adCur) + '% / ' + ppt(rate(adCur), rate(adPrev)),
+      deals:    ndeals(adCur) + ' / ' + qpct(ndeals(adCur), ndeals(adPrev)),
+      util:     (u.bill || '—') + ' / ' + (u.pto || '—'),
+      backlog:  backOpen + ' (' + backNs + ')'
+    };
+  }
+
+  var rows = [], tA = 0, tT = 0, tOpen = 0, tNs = 0;
+  GEOS.forEach(function (g) {
+    var b = book(g, fy, curQ);
+    tA += (b.a || 0); tT += (b.t || 0); tOpen += bl[g].open; tNs += bl[g].ns;
+    rows.push(mkRow(g === 'AMER' ? 'Americas' : g, b.a, b.t, curAD[g], prevAD[g], util[g] || {}, bl[g].open, bl[g].ns));
+  });
+  var totalRow = mkRow('Total', tA, tT, merge(curAD), merge(prevAD), utilTot, tOpen, tNs);
+
+  return {
+    quarterLabel: curQ + ' FY' + qLabel.split('-')[1],
+    rows: rows,
+    total: totalRow
+  };
+}
+
 // ── Main payload assembler (async) ───────────────────────────
 async function buildDeckPayload() {
   var today = new Date(); today.setHours(0,0,0,0);
@@ -5963,6 +6084,7 @@ async function buildDeckPayload() {
   var generatedDate = months[today.getMonth()] + ' ' + today.getDate() + ', ' + today.getFullYear();
 
   var screenshots = await captureDeckScreenshots(fy);
+  var util = buildUtilizationPayload(curQLabel, curQRange);
 
   return {
     generatedDate:    generatedDate,
@@ -5971,7 +6093,8 @@ async function buildDeckPayload() {
     activeProjects:   buildActiveProjectsPayload(),
     tierOwner:        buildTierOwnerPayload(),
     annualPlanSummary: buildAnnualPlanSummaryPayload(),
-    utilization:      buildUtilizationPayload(curQLabel, curQRange),
+    utilization:      util,
+    lookback:         buildLookbackPayload(curQLabel, fy, util),
     bookingsForecast: buildBookingsPayload(fy),
     backlogAnalysis:  buildBacklogPayload(fy, curQLabel, curQRange),
     goLive:           { rows: GL_SUMMARY },
