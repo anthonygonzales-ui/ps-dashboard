@@ -4017,8 +4017,8 @@ function renderBacklogAnalysis() {
 
     if (iReg >= 0 && iHR >= 0) {
       ap.data.forEach(function(r) {
-        var reg = String(r[iReg] || '').trim().toUpperCase();
-        if (reg !== 'AMER' && reg !== 'EMEA' && reg !== 'APAC') return;
+        var reg = _lbGeo(r[iReg]);   // normalize: North America + LATAM → AMER; EMEA; APAC
+        if (!reg) return;
 
         // Rule 3: skip projects that booked this quarter (already in Incremental Hours)
         if (iCloseDate >= 0) {
@@ -6425,8 +6425,8 @@ function buildBacklogPayload(fy, curQLabel, curQRange) {
     var iCloseDate = hi(ap,'Opportunity: Close Date'); if (iCloseDate < 0) iCloseDate = hi(ap,'Close Date');
     if (iReg >= 0 && iHR >= 0) {
       ap.data.forEach(function(r) {
-        var reg = String(r[iReg] || '').trim().toUpperCase();
-        if (reg !== 'AMER' && reg !== 'EMEA' && reg !== 'APAC') return;
+        var reg = _lbGeo(r[iReg]);   // normalize: North America + LATAM → AMER; EMEA; APAC
+        if (!reg) return;
         if (iCloseDate >= 0) {
           var cd = parseDate(String(r[iCloseDate] || ''));
           if (cd && cd >= curQRange.start && cd <= curQRange.end) return; // new logo — in-year booking
