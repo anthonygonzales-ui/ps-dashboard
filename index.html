@@ -409,6 +409,8 @@ th { position: relative; }
             <select id="gl-fp" onchange="renderGoLives()"><option>All</option></select></div>
           <div class="filter-group"><label>New ARR Bucket</label>
             <select id="gl-arr-bucket" onchange="renderGoLives()"><option>All</option></select></div>
+          <div class="filter-group"><label>Product Type</label>
+            <select id="gl-prodtype" onchange="renderGoLives()"><option>All</option></select></div>
           <button class="clear-btn" onclick="clearF('gl')" style="align-self:flex-end">✕ Clear</button>
         </div>
         <div id="gl-capture-area">
@@ -1266,6 +1268,8 @@ function seedFilters() {
     // ARR buckets — fixed tiers
     var arrBuckets = ['<50K','50K - 100K','100K - 250K','250K - 500K','500K+'];
     fillSel('gl-arr-bucket', arrBuckets);
+    var iGlPT = hi(s,'Opportunity: Product Type'); if (iGlPT < 0) iGlPT = hi(s,'Opportunity: Product Family'); if (iGlPT < 0) iGlPT = hi(s,'Product Type');
+    fillSel('gl-prodtype', uniq(s.data, iGlPT));
   }
   if (SHEETS.annualPlan) {
     var s = SHEETS.annualPlan;
@@ -1836,6 +1840,8 @@ function renderGoLives() {
   var fRegion    = gf('gl-region');
   var fFP        = gf('gl-fp');
   var fArrBucket = gf('gl-arr-bucket');
+  var fProdType  = gf('gl-prodtype');
+  var iGlPT = hi(s,'Opportunity: Product Type'); if (iGlPT < 0) iGlPT = hi(s,'Opportunity: Product Family'); if (iGlPT < 0) iGlPT = hi(s,'Product Type');
 
   var rows = s.data.filter(function (r) {
     if (fAccount   !== 'All' && String(r[iAccount] || '') !== fAccount)    return false;
@@ -1843,6 +1849,7 @@ function renderGoLives() {
     if (fRegion    !== 'All' && String(r[iRegion]  || '') !== fRegion)     return false;
     if (fFP        !== 'All' && String(r[iFP]      || '') !== fFP)         return false;
     if (fArrBucket !== 'All' && arrBucket(r[iARR])        !== fArrBucket) return false;
+    if (fProdType  !== 'All' && String((iGlPT >= 0 ? r[iGlPT] : '') || '') !== fProdType) return false;
     return true;
   });
 
