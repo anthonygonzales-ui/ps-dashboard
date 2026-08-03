@@ -423,6 +423,7 @@ th { position: relative; }
                 <thead><tr>
                   <th>Fiscal Period</th>
                   <th>Total Projects</th>
+                  <th>New ARR</th>
                   <th>Already Gone Live</th>
                   <th style="min-width:160px">Progress</th>
                   <th>Remaining</th>
@@ -458,6 +459,7 @@ th { position: relative; }
                 <th onclick="srt('glo',6)">Baseline GL Date ↕</th>
                 <th onclick="srt('glo',7)">Days Until Baseline GL ↕</th>
                 <th onclick="srt('glo',8)">Product Type ↕</th>
+                <th onclick="srt('glo',9)">New ARR ↕</th>
               </tr></thead>
               <tbody id="glo-body"></tbody>
             </table>
@@ -2032,6 +2034,7 @@ function renderGoLives() {
         }).join('') +
         '</tbody></table>';
 
+    var grpARR = iARR >= 0 ? g.rows.reduce(function(sum, rr){ return sum + (parseFloat(String(rr[iARR] || '').replace(/[,$]/g, '')) || 0); }, 0) : 0;
     var summaryRow =
       '<tr class="grp-row" onclick="toggleGLQuarter(\'' + safeId + '\')" style="cursor:pointer;user-select:none">' +
         '<td style="white-space:nowrap">' +
@@ -2039,6 +2042,7 @@ function renderGoLives() {
           esc(m) +
         '</td>' +
         '<td>' + g.total + '</td>' +
+        '<td>' + fmtM(grpARR) + '</td>' +
         '<td style="color:var(--green)">' + g.live + ' <span style="color:var(--text-muted)">(' + lp + '%)</span></td>' +
         '<td>' +
           '<div class="pb-wrap">' +
@@ -2052,7 +2056,7 @@ function renderGoLives() {
 
     var detailRow =
       '<tr id="' + safeId + '" style="display:' + (isOpen ? 'table-row' : 'none') + '">' +
-        '<td colspan="6" style="padding:0;border-left:2px solid var(--border);background:var(--bg-card2)">' +
+        '<td colspan="7" style="padding:0;border-left:2px solid var(--border);background:var(--bg-card2)">' +
           subHtml +
         '</td>' +
       '</tr>';
@@ -2167,7 +2171,7 @@ function renderGoLives() {
     openRows.length + ' project' + (openRows.length !== 1 ? 's' : '') + ' without an Actual Go Live Date';
 
   if (openRows.length === 0) {
-    gloEl.innerHTML = '<tr><td colspan="9" class="empty">No open projects without a go live date.</td></tr>';
+    gloEl.innerHTML = '<tr><td colspan="10" class="empty">No open projects without a go live date.</td></tr>';
   } else {
     gloEl.innerHTML = openRows.map(function(x) {
       var r          = x.r;
@@ -2209,6 +2213,7 @@ function renderGoLives() {
         '<td>' + bgl + '</td>' +
         '<td>' + daysCell + '</td>' +
         '<td>' + (prodType   || '—') + '</td>' +
+        '<td style="text-align:right">' + (function(){ var v = iARR >= 0 ? (parseFloat(String(r[iARR] || '').replace(/[,$]/g, '')) || 0) : 0; return v > 0 ? '$' + Math.round(v).toLocaleString('en-US') : '—'; })() + '</td>' +
       '</tr>';
     }).join('');
   }
