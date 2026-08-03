@@ -6077,27 +6077,35 @@ function buildLookbackPayload(qLabel, fy, utilPayload) {
 // ── Main payload assembler (async) ───────────────────────────
 async function buildDeckPayload() {
   var today = new Date(); today.setHours(0,0,0,0);
-  // Deck reporting quarter comes from the fiscal-period picker (falls back to current)
-  var fpEl = document.getElementById('deck-fp');
-  var curQLabel = (fpEl && fpEl.value) ? fpEl.value : getFQLabel(today);
+  // Current quarter / FY — drives every slide EXCEPT 2 and 6
+  var curQLabel = getFQLabel(today);
   var curQRange = getFQRange(curQLabel);
-  var fy = parseInt((curQLabel.split('-')[1] || '').replace(/\D/g, ''), 10) ||
-           (today.getMonth() === 0 ? today.getFullYear() : today.getFullYear() + 1);
+  var fyEl = document.getElementById('bf-fy');
+  var fy = (fyEl && fyEl.value) ? parseInt(fyEl.value, 10)
+           : (today.getMonth() === 0 ? today.getFullYear() : today.getFullYear() + 1);
+
+  // Fiscal-period picker — controls ONLY slide 2 (Looking Back) and slide 6 (Utilization Summary)
+  var fpEl = document.getElementById('deck-fp');
+  var selQLabel = (fpEl && fpEl.value) ? fpEl.value : curQLabel;
+  var selQRange = getFQRange(selQLabel);
+  var selFY = parseInt((selQLabel.split('-')[1] || '').replace(/\D/g, ''), 10) || fy;
+
   var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   var generatedDate = months[today.getMonth()] + ' ' + today.getDate() + ', ' + today.getFullYear();
 
   var screenshots = await captureDeckScreenshots(fy);
-  var util = buildUtilizationPayload(curQLabel, curQRange);
+  var util = buildUtilizationPayload(selQLabel, selQRange);   // slide 6 → selected quarter
 
   return {
     generatedDate:    generatedDate,
     currentFY:        fy,
     currentQuarter:   curQLabel,
+    selectedQuarter:  selQLabel,
     activeProjects:   buildActiveProjectsPayload(),
     tierOwner:        buildTierOwnerPayload(),
     annualPlanSummary: buildAnnualPlanSummaryPayload(),
     utilization:      util,
-    lookback:         buildLookbackPayload(curQLabel, fy, util),
+    lookback:         buildLookbackPayload(selQLabel, selFY, util),   // slide 2 → selected quarter
     bookingsForecast: buildBookingsPayload(fy),
     backlogAnalysis:  buildBacklogPayload(fy, curQLabel, curQRange),
     goLive:           { rows: GL_SUMMARY },
