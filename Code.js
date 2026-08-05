@@ -757,7 +757,7 @@ function generateSlidesDeck(payloadJson) {
       var nc   = hdrs.length;
       var nr   = data.length + 1; // +1 for header
       if (nr < 2) { nr = 2; data = [hdrs.map(function() { return '—'; })]; }
-      var avail = H - top - 10;
+      var avail = (opts.bottom || H) - top - 10;
       var rh    = Math.max(13, Math.min(20, Math.floor(avail / nr)));
       var th    = rh * nr;
       if (th > avail) th = avail;
@@ -1506,22 +1506,44 @@ function generateSlidesDeck(payloadJson) {
 
 
 
-    // ── SLIDE 8: BOOKINGS FORECAST (screenshot) ──────────
+    // ── SLIDE 8 (rendered 9): BOOKINGS FORECAST (native table) ──
     _deckSection = 'slide8-bookings';
     var s8 = pres.appendSlide();
     setBg(s8);
-    titleBar(s8, 'Quarterly Bookings Forecast', 'FY' + (p.currentFY || ''));
-    insertShot(s8, (p.screenshots || {}).slide8, 115, COMMENT_H);
+    titleBar(s8, 'Quarterly bookings forecast', 'FY' + (p.currentFY || ''));
+    var bf = p.bookingsForecast || { headers: [], rows: [] };
+    makeTable(s8, 84, bf.headers, bf.rows, { fontSize: 7, rightCols: [1,2,3,4,5,6,7,8,9,10,11,12], bottom: H - COMMENT_H });
     commentaryArea(s8, H - COMMENT_H);
     footer(s8);
 
 
-    // ── SLIDE 9: BACKLOG ANALYSIS (screenshot) ───────────
+    // ── SLIDE 9 (rendered 10): BACKLOG ANALYSIS (native table) ──
     _deckSection = 'slide9-backlog';
     var s9 = pres.appendSlide();
     setBg(s9);
-    titleBar(s9, 'Backlog Analysis', 'FY' + (p.currentFY || ''));
-    insertShot(s9, (p.screenshots || {}).slide9, 100, COMMENT_H, {x: 14, w: 692});
+    titleBar(s9, 'Backlog analysis', 'FY' + (p.currentFY || ''));
+    var ba = p.backlogAnalysis || { headers: [], rows: [] };
+    var baTop = 84, baBottom = H - COMMENT_H, baMaxR = 22;
+    makeTable(s9, baTop, ba.headers, ba.rows, { fontSize: 6, rightCols: [2,3,4,5,6,7,8,9,10,11,12,13,14,15], bottom: baBottom, maxRows: baMaxR });
+    // Red highlight around Cons Load (col 13) and EM Load (col 15), matching the old screenshot boxes
+    (function() {
+      var nc = (ba.headers || []).length;
+      if (!nc) return;
+      var nData = Math.min((ba.rows || []).length, baMaxR);
+      var nr = Math.max(2, nData + 1);
+      var avail = baBottom - baTop - 10;
+      var rh = Math.max(13, Math.min(20, Math.floor(avail / nr)));
+      var th = Math.min(rh * nr, avail);
+      var colW = CW / nc;
+      [13, 15].forEach(function(ci) {
+        if (ci >= nc) return;
+        var bx = s9.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD + ci * colW, baTop, colW, th);
+        bx.getObjectId();
+        bx.getFill().setTransparent();
+        bx.getBorder().setWeight(1.5);
+        bx.getBorder().getLineFill().setSolidFill(RED);
+      });
+    })();
     commentaryArea(s9, H - COMMENT_H);
     footer(s9);
 
