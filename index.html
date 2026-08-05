@@ -6560,7 +6560,41 @@ function buildBacklogPayload(fy, curQLabel, curQRange) {
     });
   });
 
-  return { fy: fy, headers: headers, rows: rows };
+  // Structured groups (quarter total + region rows, raw numbers) for the styled deck table
+  var groups = quarters.map(function(q) {
+    var regs = regions.map(function(region) {
+      var d = computed[q][region];
+      return {
+        region: region,
+        startBacklog: Math.round(d.startBacklog),
+        bookingsForecast: d.bfAct,
+        newBacklog: Math.round(d.newBacklog),
+        numCons: d.numCons, numEM: d.numEM,
+        consBacklog: Math.round(d.conBacklog),
+        emBacklog: Math.round(d.emBacklog),
+        consCap: Math.round(d.conCap),
+        consLoad: d.conCapEff ? Math.round(d.conBacklog / d.conCapEff * 100) : null,
+        emCap: Math.round(d.emCap),
+        emLoad: d.emCapEff ? Math.round(d.emBacklog / d.emCapEff * 100) : null
+      };
+    });
+    function sum(f) { return regions.reduce(function(a, region) { return a + (computed[q][region][f] || 0); }, 0); }
+    var tConB = sum('conBacklog'), tConCE = sum('conCapEff'), tEmB = sum('emBacklog'), tEmCE = sum('emCapEff');
+    var total = {
+      startBacklog: Math.round(sum('startBacklog')),
+      bookingsForecast: sum('bfAct'),
+      newBacklog: Math.round(sum('newBacklog')),
+      numCons: sum('numCons'), numEM: sum('numEM'),
+      consBacklog: Math.round(tConB), emBacklog: Math.round(tEmB),
+      consCap: Math.round(sum('conCap')),
+      consLoad: tConCE ? Math.round(tConB / tConCE * 100) : null,
+      emCap: Math.round(sum('emCap')),
+      emLoad: tEmCE ? Math.round(tEmB / tEmCE * 100) : null
+    };
+    return { label: q + '-FY' + fy, qtr: q, total: total, regions: regs };
+  });
+
+  return { fy: fy, headers: headers, rows: rows, groups: groups };
 }
 
 </script>

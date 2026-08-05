@@ -767,7 +767,7 @@ function generateSlidesDeck(payloadJson) {
       // Header row
       for (var c = 0; c < nc; c++) {
         var hc = tbl.getCell(0, c);
-        hc.getFill().setSolidFill(RED);
+        hc.getFill().setSolidFill('#091A23');
         var ht = hc.getText();
         ht.setText(String(hdrs[c]));
         ht.getTextStyle().setFontFamily('Space Grotesk').setFontSize(7.5).setForegroundColor('#FFFFFF').setBold(true);
@@ -1517,33 +1517,78 @@ function generateSlidesDeck(payloadJson) {
     footer(s8);
 
 
-    // ── SLIDE 9 (rendered 10): BACKLOG ANALYSIS (native table) ──
-    _deckSection = 'slide9-backlog';
-    var s9 = pres.appendSlide();
-    setBg(s9);
-    titleBar(s9, 'Backlog analysis', 'FY' + (p.currentFY || ''));
-    var ba = p.backlogAnalysis || { headers: [], rows: [] };
-    var baTop = 84, baBottom = H - COMMENT_H, baMaxR = 22;
-    makeTable(s9, baTop, ba.headers, ba.rows, { fontSize: 6, rightCols: [2,3,4,5,6,7,8,9,10,11,12,13,14,15], bottom: baBottom, maxRows: baMaxR });
-    // Red highlight around Cons Load (col 13) and EM Load (col 15), matching the old screenshot boxes
-    (function() {
-      var nc = (ba.headers || []).length;
-      if (!nc) return;
-      var nData = Math.min((ba.rows || []).length, baMaxR);
-      var nr = Math.max(2, nData + 1);
-      var avail = baBottom - baTop - 10;
-      var rh = Math.max(13, Math.min(20, Math.floor(avail / nr)));
-      var th = Math.min(rh * nr, avail);
-      var colW = CW / nc;
-      [13, 15].forEach(function(ci) {
-        if (ci >= nc) return;
-        var bx = s9.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD + ci * colW, baTop, colW, th);
+    // ── SLIDE 9 (rendered 10): BACKLOG & CAPACITY (styled native table) ──
+    function drawBacklogTable(slide, groups) {
+      var cols = [
+        { key: 'label',            h: 'QTR',                  w: 56, left: true },
+        { key: 'startBacklog',     h: 'Starting\nBacklog',    w: 58 },
+        { key: 'bookingsForecast', h: 'Bookings\nForecast',   w: 64, cream: true },
+        { key: 'newBacklog',       h: 'New\nBacklog',         w: 56 },
+        { key: 'numCons',          h: '# Consultants',        w: 50 },
+        { key: 'numEM',            h: '# EM',                 w: 38 },
+        { key: 'consBacklog',      h: 'Consultant\nBacklog',  w: 60 },
+        { key: 'emBacklog',        h: 'EM\nBacklog',          w: 50 },
+        { key: 'consCap',          h: 'Consultant\nCapacity', w: 60 },
+        { key: 'consLoad',         h: 'Consultant\nLoad',     w: 50, load: true },
+        { key: 'emCap',            h: 'EM\nCapacity',         w: 50, load: false },
+        { key: 'emLoad',           h: 'EM\nLoad',             w: 46, load: true }
+      ];
+      var xs = [], cx = PAD;
+      cols.forEach(function(c) { xs.push(cx); cx += c.w; });
+      var tableW = cx - PAD;
+
+      var headY = 78, headH = 34;
+      var hbg = rect(slide, PAD, headY, tableW, headH, '#091A23'); hbg.getObjectId();
+      cols.forEach(function(c, i) {
+        txt(slide, c.h, xs[i] + 3, headY, c.w - 6, headH, { size: 7, bold: true, color: '#FFFFFF', align: c.left ? undefined : 'center' });
+      });
+
+      var flat = [];
+      groups.forEach(function(g) {
+        flat.push({ isTotal: true, label: String(g.label || '').replace('-FY', '-'), d: g.total });
+        (g.regions || []).forEach(function(r) { flat.push({ isTotal: false, label: r.region, d: r }); });
+      });
+      var top = headY + headH;
+      var bottom = H - COMMENT_H;
+      var n = Math.max(1, flat.length);
+      var rowH = Math.max(13, Math.min(26, Math.floor((bottom - top) / n)));
+
+      function loadBg(v) { if (v == null) return null; if (v < 90) return '#C0DD97'; if (v <= 110) return '#F7C1C1'; return '#F09595'; }
+      function commas(v) { return (v == null) ? '—' : Math.round(v).toLocaleString('en-US'); }
+
+      flat.forEach(function(row, ri) {
+        var ry = top + ri * rowH;
+        if (row.isTotal) { var bg = rect(slide, PAD, ry, tableW, rowH, '#F1EFE8'); bg.getObjectId(); }
+        cols.forEach(function(c, ci) {
+          if (c.load) { var lb = loadBg(row.d[c.key]); if (lb) { var lc = rect(slide, xs[ci], ry, c.w, rowH, lb); lc.getObjectId(); } }
+          else if (c.cream && !row.isTotal) { var cc = rect(slide, xs[ci], ry, c.w, rowH, '#FBEED9'); cc.getObjectId(); }
+          var raw = (c.key === 'label') ? row.label : row.d[c.key];
+          var str = (c.key === 'label') ? String(raw)
+                    : (c.load ? (raw == null ? '—' : Math.round(raw) + '%') : commas(raw));
+          txt(slide, str, xs[ci] + 3, ry, c.w - 6, rowH, { size: 7, bold: row.isTotal || c.key === 'label', color: TEXT, align: c.left ? undefined : 'right' });
+        });
+        var sep = rect(slide, PAD, ry + rowH - 0.5, tableW, 0.5, '#D3D1C7'); sep.getObjectId();
+      });
+
+      // Red highlight boxes around Consultant Load (col 9) and EM Load (col 11)
+      var fullH = (top + n * rowH) - headY;
+      [9, 11].forEach(function(ci) {
+        var bx = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, xs[ci], headY, cols[ci].w, fullH);
         bx.getObjectId();
         bx.getFill().setTransparent();
         bx.getBorder().setWeight(1.5);
         bx.getBorder().getLineFill().setSolidFill(RED);
       });
-    })();
+    }
+
+    _deckSection = 'slide9-backlog';
+    var s9 = pres.appendSlide();
+    setBg(s9);
+    var bgroups = (p.backlogAnalysis && p.backlogAnalysis.groups) ? p.backlogAnalysis.groups : [];
+    var baSub = bgroups.length ? ('Assumes target for ' + bgroups[0].qtr + '–' + bgroups[bgroups.length - 1].qtr) : ('FY' + (p.currentFY || ''));
+    titleBar(s9, 'Backlog & capacity', baSub);
+    if (bgroups.length) drawBacklogTable(s9, bgroups);
+    else txt(s9, 'No backlog data available.', PAD, 120, CW, 24, { size: 12, color: MUTED });
     commentaryArea(s9, H - COMMENT_H);
     footer(s9);
 
