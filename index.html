@@ -6116,6 +6116,7 @@ async function buildDeckPayload() {
     activeProjects:   buildActiveProjectsPayload(),
     tierOwner:        buildTierOwnerPayload(),
     annualPlanSummary: buildAnnualPlanSummaryPayload(),
+    annualPlanDetail:  buildAnnualPlanDetailPayload(),
     utilization:      util,
     lookback:         buildLookbackPayload(selQLabel, selFY, util),   // slide 2 → selected quarter
     bookingsForecast: buildBookingsPayload(fy),
@@ -6214,6 +6215,27 @@ function buildTierOwnerPayload() {
 }
 
 // ── Annual plan summary for slide 5 ──────────────────────────
+// Per-project annual-plan detail rows for the native slides 7 & 8 (split by util ratio)
+function buildAnnualPlanDetailPayload() {
+  if (!SHEETS.annualPlan) return { rows: [] };
+  var s = SHEETS.annualPlan;
+  var iAccount = hi(s,'Account'), iProjN = hi(s,'Project: Project Name'), iRegion = hi(s,'Region');
+  var iHrsEnt = hi(s,'Customer Hours Entitlement'), iThrC = hi(s,'% Through Contract'),
+      iHrsCon = hi(s,'% Hours Consumed'), iUtilR = hi(s,'Utilization Ratio');
+  var rows = s.data.map(function(r) {
+    return {
+      region:  String(r[iRegion]  || '').trim(),
+      account: String(r[iAccount] || '').trim(),
+      project: String(r[iProjN]   || '').trim(),
+      hrsEnt:  parseFloat(r[iHrsEnt]) || 0,
+      thrC:    parseFloat(r[iThrC])   || 0,
+      hrsCon:  parseFloat(r[iHrsCon]) || 0,
+      util:    parseFloat(r[iUtilR])  || 0
+    };
+  });
+  return { rows: rows };
+}
+
 function buildAnnualPlanSummaryPayload() {
   if (!SHEETS.annualPlan) return { headers: ['Region','<50%','50–89%','≥90%','Total'], rows: [] };
   var s = SHEETS.annualPlan;

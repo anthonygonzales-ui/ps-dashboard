@@ -1422,21 +1422,84 @@ function generateSlidesDeck(payloadJson) {
     footer(sU);
 
 
-    // ── SLIDE 6a: ANNUAL PLAN < 50% UTILIZATION (screenshot) ───
+    // ── Shared renderer: native Annual Plan & RE table (slides 7 & 8) ──
+    // Same columns as the dashboard annual-plan table; % columns drawn as
+    // slide-4-style progress bars. Rows are pre-filtered/sorted by caller.
+    function drawAnnualPlanTable(slide, rows) {
+      var cX = [28,  86,  206, 356, 430, 532, 634];
+      var cW = [58, 118, 148, 70,  98,  98,  58];
+      var heads = ['Region', 'Account', 'Project', 'Hrs entitlement', '% through contract', '% hours consumed', 'Util ratio'];
+      var hy = 74, hh = 28;
+      heads.forEach(function(hd, i) {
+        txt(slide, hd, cX[i], hy, cW[i], hh, { size: 8, bold: true, color: MUTED, vAlign: 'top', align: i >= 3 ? 'center' : undefined });
+      });
+      var divY = hy + hh;
+      var hair = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, PAD, divY, CW, 0.75);
+      hair.getObjectId(); hair.getFill().setSolidFill('#B9C2C6'); hair.getBorder().setTransparent();
+
+      if (!rows || !rows.length) {
+        txt(slide, 'No projects in this utilization band.', PAD, divY + 16, CW, 22, { size: 11, color: MUTED });
+        return;
+      }
+
+      function trunc(v, n) { v = String(v || ''); return v.length > n ? v.slice(0, n - 1) + '…' : v; }
+
+      var top = divY + 8;
+      var bottomLimit = H - COMMENT_H - 6;
+      var gap = 3;
+      var maxRows = Math.max(1, Math.floor((bottomLimit - top + gap) / (14 + gap)));
+      var truncated = rows.length > maxRows;
+      var show = truncated ? rows.slice(0, maxRows - 1) : rows;
+      var n = show.length + (truncated ? 1 : 0);
+      var rowH = Math.max(12, Math.min(20, Math.floor(((bottomLimit - top) - gap * (n - 1)) / n)));
+
+      function pctBar(x, w, pct, color, midY) {
+        var lblW = 28, trkW = w - lblW, by = midY - 3;
+        var track = rect(slide, x, by, trkW, 6, CARD2); track.getObjectId();
+        var fillW = Math.max(1, Math.round(trkW * Math.min(pct, 100) / 100));
+        var fl = rect(slide, x, by, fillW, 6, color); fl.getObjectId();
+        txt(slide, Math.round(pct) + '%', x + trkW + 2, midY - 7, lblW - 2, 14, { size: 7, color: TEXT, align: 'right' });
+      }
+
+      show.forEach(function(r, ri) {
+        var ry = top + ri * (rowH + gap);
+        var midY = ry + Math.floor(rowH / 2);
+        txt(slide, r.region || '—',  cX[0], ry, cW[0], rowH, { size: 8, color: TEXT });
+        txt(slide, trunc(r.account, 24), cX[1], ry, cW[1], rowH, { size: 8, color: TEXT });
+        txt(slide, trunc(r.project, 30), cX[2], ry, cW[2], rowH, { size: 8, color: TEXT });
+        txt(slide, Math.round(r.hrsEnt || 0).toLocaleString(), cX[3], ry, cW[3], rowH, { size: 8, color: TEXT, align: 'center' });
+        pctBar(cX[4], cW[4], r.thrC || 0,  BLUE,  midY);
+        pctBar(cX[5], cW[5], r.hrsCon || 0, GREEN, midY);
+        var uc = (r.util >= 100) ? GREEN : (r.util >= 80 ? YELLOW : RED);
+        txt(slide, (Math.round((r.util || 0) * 10) / 10) + '%', cX[6], ry, cW[6], rowH, { size: 9, bold: true, color: uc, align: 'center' });
+      });
+      if (truncated) {
+        var ry2 = top + show.length * (rowH + gap);
+        txt(slide, '+ ' + (rows.length - show.length) + ' more', cX[0], ry2, CW, rowH, { size: 8, italic: true, color: MUTED });
+      }
+    }
+
+    function annualPlanSubset(lo, hiEx) {
+      var all = (p.annualPlanDetail && p.annualPlanDetail.rows) ? p.annualPlanDetail.rows : [];
+      return all.filter(function(r) { var u = r.util || 0; return u >= lo && u < hiEx; })
+                .sort(function(a, b) { return (a.util || 0) - (b.util || 0); });
+    }
+
+    // ── SLIDE 6a (rendered 7): ANNUAL PLAN < 50% UTILIZATION (native) ──
     _deckSection = 'slide6a-under50';
     var s6a = pres.appendSlide();
     setBg(s6a);
-    titleBar(s6a, 'Annual Plan & RE  —  Under 50% Utilization', p.generatedDate);
-    insertShot(s6a, (p.screenshots || {}).slide6a, 68, COMMENT_H);
+    titleBar(s6a, 'Annual Plan & RE — Under 50% utilization', p.generatedDate);
+    drawAnnualPlanTable(s6a, annualPlanSubset(0, 50));
     commentaryArea(s6a, H - COMMENT_H);
     footer(s6a);
 
-    // ── SLIDE 6b: ANNUAL PLAN 50–75% UTILIZATION (screenshot) ──
+    // ── SLIDE 6b (rendered 8): ANNUAL PLAN 50–75% UTILIZATION (native) ──
     _deckSection = 'slide6b-50to75';
     var s6b = pres.appendSlide();
     setBg(s6b);
-    titleBar(s6b, 'Annual Plan & RE  —  50–75% Utilization', p.generatedDate);
-    insertShot(s6b, (p.screenshots || {}).slide6b, 68, COMMENT_H);
+    titleBar(s6b, 'Annual Plan & RE — 50–75% utilization', p.generatedDate);
+    drawAnnualPlanTable(s6b, annualPlanSubset(50, 75));
     commentaryArea(s6b, H - COMMENT_H);
     footer(s6b);
 
