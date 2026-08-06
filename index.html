@@ -215,20 +215,26 @@ canvas { max-height: 200px; }
 /* ---- EMPTY STATE ---- */
 .empty { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
 
-/* ---- RED ALERTS TAB ---- */
-.ra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.ra-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
-.ra-card-header { display: flex; align-items: center; justify-content: space-between; padding: 11px 16px; border-bottom: 1px solid var(--border); background: var(--bg-card2); flex-shrink: 0; }
-.ra-card-title { font-size: 12.5px; font-weight: 600; }
-.ra-badge-count { background: var(--red); color: #fff; border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 700; }
-.ra-scroll { max-height: 340px; overflow-y: auto; }
-.ra-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid rgba(37,37,80,0.4); font-size: 12px; }
-.ra-row:last-child { border-bottom: none; }
-.ra-row:hover { background: var(--bg-hover); }
-.ra-score-ring { width: 36px; height: 36px; border-radius: 50%; border: 2.5px solid; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
-.ra-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px; }
-@keyframes pulse-ra { 0%,100%{opacity:1} 50%{opacity:.45} }
-.ra-nav-icon { animation: pulse-ra 2.2s ease-in-out infinite; }
+/* ---- INSIGHTS TAB ---- */
+.ins-wrap { display: flex; flex-direction: column; max-width: 900px; }
+.ins-thread { max-height: calc(100vh - 300px); min-height: 200px; overflow-y: auto; padding: 4px 2px; display: flex; flex-direction: column; gap: 14px; }
+.ins-msg { display: flex; gap: 10px; font-size: 13px; line-height: 1.55; }
+.ins-avatar { width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.ins-msg.user .ins-avatar { background: var(--bg-hover); }
+.ins-msg.assistant .ins-avatar { background: var(--red); }
+.ins-bubble { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; color: var(--text); white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
+.ins-msg.user .ins-bubble { background: var(--bg-card2); }
+.ins-empty { color: var(--text-muted); font-size: 13px; padding: 20px 4px; line-height: 1.6; }
+.ins-suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.ins-chip { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 6px 12px; font-size: 12px; color: var(--text-muted); cursor: pointer; transition: all .15s; }
+.ins-chip:hover { color: var(--text); border-color: var(--red); }
+.ins-inputbar { display: flex; gap: 10px; align-items: flex-end; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px; }
+.ins-input { flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 13px; color: var(--text); font-size: 13px; font-family: inherit; resize: none; min-height: 20px; max-height: 160px; line-height: 1.4; }
+.ins-input:focus { outline: none; border-color: var(--red); }
+.ins-send { background: var(--red); color: #fff; border: none; border-radius: 10px; padding: 0 18px; height: 42px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+.ins-send:disabled { opacity: .5; cursor: default; }
+.ins-note { font-size: 10.5px; color: var(--text-dim); margin-top: 8px; }
+.ins-typing { color: var(--text-muted); font-style: italic; }
 
 /* ---- SCROLLBAR ---- */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -310,10 +316,9 @@ th { position: relative; }
       <div class="nav-item" onclick="switchTab('team-availability')">
         <span class="nav-icon">👥</span> Team Availability
       </div>
-      <div class="nav-section">Monitoring</div>
-      <div class="nav-item" onclick="switchTab('red-alerts')" style="color:var(--red)" id="nav-red-alerts">
-        <span class="nav-icon ra-nav-icon">🚨</span> Red Alerts
-        <span id="ra-nav-count" style="margin-left:auto;background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;display:none"></span>
+      <div class="nav-section">Assistant</div>
+      <div class="nav-item" onclick="switchTab('insights')" id="nav-insights">
+        <span class="nav-icon">✨</span> Insights
       </div>
     </nav>
   </aside>
@@ -719,33 +724,21 @@ th { position: relative; }
       </div>
 
       <!-- ═══════════════════════════════════════════════
-           TAB 6: RED ALERTS
+           TAB 6: INSIGHTS (Ask Claude about the data)
       ═══════════════════════════════════════════════ -->
-      <div id="panel-red-alerts" class="panel">
-        <div class="ra-grid">
-
-          <!-- Widget 1: At-Risk Projects (Composite Risk Score) -->
-          <div class="ra-card">
-            <div class="ra-card-header">
-              <span class="ra-card-title">🚨 At-Risk Projects</span>
-              <span class="ra-badge-count" id="ra-risk-count">0</span>
-            </div>
-            <div class="ra-scroll" id="ra-risk-body">
-              <div class="ra-empty">Loading…</div>
+      <div id="panel-insights" class="panel">
+        <div class="ins-wrap">
+          <div class="ins-thread" id="ins-thread">
+            <div class="ins-empty" id="ins-empty">
+              Ask a question about the projects, go-lives, bookings, backlog, attach rates, or annual plan currently loaded in the dashboard. Answers are generated by Claude from the live dashboard data.
+              <div class="ins-suggest" id="ins-suggest"></div>
             </div>
           </div>
-
-          <!-- Widget 2: Contract Expiry (Annual Plan only) -->
-          <div class="ra-card">
-            <div class="ra-card-header">
-              <span class="ra-card-title">📋 Contract Expiry — Annual Plan</span>
-              <span class="ra-badge-count" id="ra-contract-count">0</span>
-            </div>
-            <div class="ra-scroll" id="ra-contract-body">
-              <div class="ra-empty">Loading…</div>
-            </div>
+          <div class="ins-inputbar">
+            <textarea id="ins-input" class="ins-input" rows="1" placeholder="Ask about your PS data…" onkeydown="insKey(event)" oninput="insAutoGrow(this)"></textarea>
+            <button class="ins-send" id="ins-send" onclick="insAsk()">Ask</button>
           </div>
-
+          <div class="ins-note">Powered by the Claude API. Answers are generated from the dashboard data currently loaded in your browser and may contain mistakes — verify important figures.</div>
         </div>
       </div>
 
@@ -1024,10 +1017,10 @@ var TAB_META = {
     panel:  'panel-attach-rates',
     navIdx: 7
   },
-  'red-alerts': {
-    title:  '🚨 Red Alerts',
-    sub:    'At-risk projects, overdue go-lives, and expiring contracts',
-    panel:  'panel-red-alerts',
+  'insights': {
+    title:  '✨ Insights',
+    sub:    'Ask questions about your PS data — powered by Claude',
+    panel:  'panel-insights',
     navIdx: 9
   },
   'team-availability': {
@@ -1575,7 +1568,7 @@ function renderCurrentTab() {
   else if (CUR_TAB === 'bookings-forecast') renderBookingsForecast();
   else if (CUR_TAB === 'backlog-analysis')  renderBacklogAnalysis();
   else if (CUR_TAB === 'attach-rates')      renderAttachRates();
-  else if (CUR_TAB === 'red-alerts')         renderRedAlerts();
+  else if (CUR_TAB === 'insights')           renderInsights();
   else if (CUR_TAB === 'team-availability')  renderTeamAvailability();
 }
 
@@ -4828,186 +4821,140 @@ function renderAttachRates() {
 }
 
 // ════════════════════════════════════════════════════════════
-// TAB 5 — RED ALERTS
+// TAB — INSIGHTS (ask questions about the dashboard data via Claude)
 // ════════════════════════════════════════════════════════════
-function renderRedAlerts() {
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
-  renderRARiskScores(today);
-  renderRAContractExpiry(today);
+var INS_MESSAGES = [];   // running chat transcript: [{role, content}, ...]
+var INS_BUSY     = false;
+var INS_SEEDED   = false;
 
-  // Update nav badge with total alert count
-  var totalAlerts = 0;
-  ['ra-risk-count','ra-contract-count'].forEach(function(id) {
-    totalAlerts += parseInt(document.getElementById(id).textContent) || 0;
+var INS_SUGGESTIONS = [
+  'Which active projects look most at risk right now, and why?',
+  'Which annual-plan contracts expire in the next 90 days?',
+  'Summarize service bookings attainment by region this quarter.',
+  'Which accounts have the most hours remaining in their entitlement?'
+];
+
+function renderInsights() {
+  if (INS_SEEDED) return;
+  INS_SEEDED = true;
+  var sug = document.getElementById('ins-suggest');
+  if (sug) {
+    sug.innerHTML = INS_SUGGESTIONS.map(function(q) {
+      return '<div class="ins-chip" onclick="insUseSuggestion(this)">' + esc(q) + '</div>';
+    }).join('');
+  }
+}
+
+function insUseSuggestion(el) {
+  var input = document.getElementById('ins-input');
+  input.value = el.textContent;
+  insAutoGrow(input);
+  input.focus();
+}
+
+function insAutoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+
+function insKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); insAsk(); }
+}
+
+// Build a compact JSON context from the sheets currently loaded in the browser.
+function insBuildContext() {
+  var wanted = {
+    activeProjects: 'Open/active PS projects (account, health, hours entitlement vs entered, go-live dates, tier, owner)',
+    goLive:         'Go-live tracking (baseline vs actual go-live dates)',
+    annualPlan:     'Annual plan projects (contract start/end dates, utilization ratio, owner)',
+    bookings:       'PS service bookings actuals by fiscal period and region',
+    attachRates:    'PS attach-rate records (PS price vs new ARR by product/region)',
+    cloudUsage:     'Cloud usage rate records'
+  };
+  var out = { generatedAt: new Date().toISOString(), sheets: {} };
+  Object.keys(wanted).forEach(function(k) {
+    var s = SHEETS[k];
+    if (!s || !s.hdrs) return;
+    out.sheets[k] = {
+      description: wanted[k],
+      columns: s.hdrs,
+      rowCount: s.data.length,
+      rows: s.data
+    };
   });
-  var navCount = document.getElementById('ra-nav-count');
-  if (navCount) {
-    navCount.textContent = totalAlerts;
-    navCount.style.display = totalAlerts > 0 ? 'inline-block' : 'none';
-  }
+  return JSON.stringify(out);
 }
 
-// ── Widget 1: Composite Risk Score ──
-function renderRARiskScores(today) {
-  var el     = document.getElementById('ra-risk-body');
-  var cntEl  = document.getElementById('ra-risk-count');
-  if (!SHEETS.activeProjects) {
-    el.innerHTML = '<div class="ra-empty">No active project data available.</div>';
+function insAppend(role, text) {
+  var thread = document.getElementById('ins-thread');
+  var empty  = document.getElementById('ins-empty');
+  if (empty) empty.remove();
+  var wrap = document.createElement('div');
+  wrap.className = 'ins-msg ' + role;
+  wrap.innerHTML = '<div class="ins-avatar">' + (role === 'user' ? '🧑' : '✨') + '</div>' +
+                   '<div class="ins-bubble"></div>';
+  wrap.querySelector('.ins-bubble').textContent = text;
+  thread.appendChild(wrap);
+  thread.scrollTop = thread.scrollHeight;
+  return wrap;
+}
+
+function insAsk() {
+  if (INS_BUSY) return;
+  var input = document.getElementById('ins-input');
+  var q = (input.value || '').trim();
+  if (!q) return;
+
+  if (!SHEETS || !SHEETS.activeProjects) {
+    insAppend('assistant', 'Dashboard data is still loading. Please try again in a moment.');
     return;
   }
-  var s        = SHEETS.activeProjects;
-  var iAccount = hi(s,'Account');
-  var iProjN   = hi(s,'Project: Project Name');
-  var iHealth  = hi(s,'Health');
-  var iBaseGL  = hi(s,'Baseline Go Live Date');
-  var iActGL   = hi(s,'Actual Go Live Date');
-  var iHrsEnt  = hi(s,'Customer Hours Entitlement');
-  var iEntered = hi(s,'Entered Hours');
-  var iKickoff = hi(s,'Project Kickoff Date');
-  var iHandoff = hi(s,'Sales to PS Handoff Date');
-  var iProjTier= hi(s,'Project Tier');
-  var iOppId   = hi(s,'Project: ID');
 
-  var scored = s.data.map(function(r) {
-    var score   = 0;
-    var reasons = [];
+  INS_BUSY = true;
+  var sendBtn = document.getElementById('ins-send');
+  sendBtn.disabled = true;
+  input.value = '';
+  insAutoGrow(input);
 
-    // Health component (0–40 pts)
-    var health = String(r[iHealth] || '').toLowerCase();
-    if (health.includes('red'))         { score += 40; reasons.push('Health: Red');    }
-    else if (health.includes('yellow')) { score += 20; reasons.push('Health: Yellow'); }
+  insAppend('user', q);
+  INS_MESSAGES.push({ role: 'user', content: q });
 
-    // Hours consumed % (0–20 pts) — only applies if entitlement >= 480 hrs
-    var hrsEnt  = parseFloat(r[iHrsEnt])  || 0;
-    var entered = parseFloat(r[iEntered]) || 0;
-    var hPct    = hrsEnt > 0 ? Math.round(entered / hrsEnt * 100) : 0;
-    if (hrsEnt >= 480) {
-      if (hPct >= 90)      { score += 20; reasons.push(hPct + '% hours used'); }
-      else if (hPct >= 75) { score += 10; reasons.push(hPct + '% hours used'); }
-    }
+  var pending = insAppend('assistant', '');
+  pending.querySelector('.ins-bubble').innerHTML = '<span class="ins-typing">Thinking…</span>';
 
-    // Days past baseline GL with no actual GL (0–30 pts)
-    var actGL  = String(r[iActGL]  || '').trim();
-    var baseGL = String(r[iBaseGL] || '').trim();
-    if (!actGL && baseGL) {
-      var bglDate = new Date(baseGL);
-      if (!isNaN(bglDate)) {
-        var daysPast = Math.floor((today - bglDate) / 86400000);
-        if (daysPast > 0) {
-          score += Math.min(30, daysPast);
-          reasons.push('GL overdue ' + daysPast + 'd');
-        }
+  var ctx = insBuildContext();
+
+  function finish() {
+    INS_BUSY = false;
+    sendBtn.disabled = false;
+    input.focus();
+    var thread = document.getElementById('ins-thread');
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var data;
+      try { data = JSON.parse(res); } catch (e) { data = { success: false, error: 'Unexpected response from server.' }; }
+      var bubble = pending.querySelector('.ins-bubble');
+      if (data && data.success) {
+        bubble.textContent = data.answer;
+        INS_MESSAGES.push({ role: 'assistant', content: data.answer });
+      } else {
+        bubble.innerHTML = '<span style="color:var(--red)">' + esc((data && data.error) || 'Something went wrong.') + '</span>';
+        INS_MESSAGES.pop();   // drop the unanswered user turn
       }
-    }
-
-    // Stalled — has handoff but no kickoff (10 pts)
-    var handoff = String(r[iHandoff] || '').trim();
-    var kickoff = String(r[iKickoff] || '').trim();
-    if (handoff && !kickoff) { score += 10; reasons.push('No kickoff set'); }
-
-    return { r: r, score: Math.min(score, 100), reasons: reasons };
-  }).filter(function(x) { return x.score >= 30; })  // exclude LOW
-    .sort(function(a, b)  { return b.score - a.score; });
-
-  cntEl.textContent = scored.length;
-  if (scored.length === 0) {
-    el.innerHTML = '<div class="ra-empty">No at-risk projects detected 🎉</div>';
-    return;
-  }
-
-  el.innerHTML = scored.map(function(x) {
-    var r = x.r, score = x.score;
-    var sCol   = score >= 60 ? '#FF4438' : '#FFD600';
-    var sevLbl = score >= 60 ? 'HIGH'    : 'MED';
-    var sevBg  = score >= 60 ? '#FF443820' : '#FFD60020';
-    var account  = esc(String(r[iAccount] || ''));
-    var projN    = esc(String(r[iProjN]   || ''));
-    var tier     = iProjTier >= 0 ? String(r[iProjTier] || '') : '';
-    var oppId    = iOppId >= 0 ? String(r[iOppId] || '').trim() : '';
-    var projLink = oppId
-      ? '<a href="https://redis.lightning.force.com/lightning/r/project_cloud__Project__c/' + oppId + '/view" target="_blank" style="color:var(--red);text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + projN + '</a>'
-      : projN;
-
-    return '<div class="ra-row" style="border-left:3px solid ' + sCol + ';background:' + sCol + '0A">' +
-      '<div class="ra-score-ring" style="border-color:' + sCol + ';color:' + sCol + '">' + score + '</div>' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-weight:500;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + projN + '">' + projLink + '</div>' +
-        '<div style="font-size:10px;color:var(--text-muted);margin-top:1px">' + account + (tier ? ' · ' + esc(tier) : '') + '</div>' +
-        '<div style="font-size:10px;color:var(--text-dim);margin-top:2px">' + esc(x.reasons.join(' · ')) + '</div>' +
-      '</div>' +
-      '<span style="background:' + sevBg + ';color:' + sCol + ';font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;flex-shrink:0">' + sevLbl + '</span>' +
-    '</div>';
-  }).join('');
+      finish();
+    })
+    .withFailureHandler(function(err) {
+      var bubble = pending.querySelector('.ins-bubble');
+      bubble.innerHTML = '<span style="color:var(--red)">' + esc(String(err && err.message ? err.message : err)) + '</span>';
+      INS_MESSAGES.pop();
+      finish();
+    })
+    .askInsights(JSON.stringify(INS_MESSAGES), ctx);
 }
 
-// ── Widget 2: Contract Expiry (Annual Plan projects only, within 90 days) ──
-function renderRAContractExpiry(today) {
-  var el    = document.getElementById('ra-contract-body');
-  var cntEl = document.getElementById('ra-contract-count');
-  if (!SHEETS.annualPlan) {
-    el.innerHTML = '<div class="ra-empty">No annual plan data available.</div>';
-    return;
-  }
-  var s        = SHEETS.annualPlan;
-  var iAccount = hi(s,'Account');
-  var iProjN   = hi(s,'Project: Project Name');
-  var iOppId   = hi(s,'Project: ID');
-  var iOwner   = hi(s,'Project: Owner Name');
-  var iCEnd    = hi(s,'Contract End');
-  if (iCEnd < 0) iCEnd = hi(s,'Contract End Date');
-  if (iCEnd < 0) iCEnd = hi(s,'Contract End date');
-
-  var rows = s.data.map(function(r) {
-    var cendStr = iCEnd >= 0 ? String(r[iCEnd] || '').trim() : '';
-    if (!cendStr) return null;
-    var cendDate = new Date(cendStr);
-    if (isNaN(cendDate)) return null;
-    var daysLeft = Math.floor((cendDate - today) / 86400000);
-    if (daysLeft > 90) return null;
-    return { r: r, daysLeft: daysLeft, cendDate: cendDate };
-  }).filter(Boolean)
-    .sort(function(a, b) { return a.daysLeft - b.daysLeft; });
-
-  cntEl.textContent = rows.length;
-  if (rows.length === 0) {
-    el.innerHTML = iCEnd < 0
-      ? '<div class="ra-empty">Contract End column not found in Annual Plan sheet.</div>'
-      : '<div class="ra-empty">No contracts expiring within 90 days &#127881;</div>';
-    return;
-  }
-
-  el.innerHTML = rows.map(function(x) {
-    var r        = x.r;
-    var dl       = x.daysLeft;
-    var cBorder  = dl < 0 ? '#FF443888' : dl <= 14 ? '#FF4438' : dl <= 30 ? '#FFD600' : '#42A5F5';
-    var cText    = dl < 0 ? '#FF4438'   : dl <= 14 ? '#FF4438' : dl <= 30 ? '#FFD600' : '#42A5F5';
-    var cBg      = dl < 0 ? '#FF443810' : dl <= 14 ? '#FF443812' : dl <= 30 ? '#FFD60012' : '#42A5F510';
-    var account  = esc(String(r[iAccount] || ''));
-    var projN    = esc(String(r[iProjN]   || ''));
-    var oppId    = iOppId >= 0 ? String(r[iOppId] || '').trim() : '';
-    var owner    = iOwner >= 0 ? esc(String(r[iOwner] || '')) : '';
-    var projLink = oppId
-      ? '<a href="https://redis.lightning.force.com/lightning/r/project_cloud__Project__c/' + oppId + '/view" target="_blank" style="color:var(--red);text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + projN + '</a>'
-      : projN;
-    var daysLabel = dl < 0 ? 'Expired ' + Math.abs(dl) + 'd ago'
-      : dl === 0  ? 'Expires today'
-      : 'Expires in ' + dl + 'd';
-    var dateLabel = x.cendDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-    return '<div class="ra-row" style="border-left:3px solid ' + cBorder + ';background:' + cBg + '">' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-weight:500;max-width:185px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + projN + '">' + projLink + '</div>' +
-        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">' + account +
-          (owner ? ' &nbsp;&middot;&nbsp; ' + owner : '') + '</div>' +
-      '</div>' +
-      '<div style="text-align:right;flex-shrink:0;margin-left:8px">' +
-        '<div style="font-size:12px;font-weight:700;color:' + cText + '">' + daysLabel + '</div>' +
-        '<div style="font-size:10px;color:var(--text-muted)">' + dateLabel + '</div>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
 
 // ════════════════════════════════════════════════════════════
 // ACTIVE PROJECTS — resizable column patch

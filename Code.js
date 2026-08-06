@@ -64,6 +64,99 @@ function getAllData() {
 }
 
 /**
+ * INSIGHTS TAB — answer a natural-language question about the dashboard data
+ * using the Claude (Anthropic) Messages API.
+ *
+ *   messagesJson : JSON string of the running chat transcript,
+ *                  e.g. [{"role":"user","content":"..."},{"role":"assistant",...}]
+ *   contextJson  : JSON string of the dashboard data (built client-side from the
+ *                  sheets currently loaded in the browser).
+ *
+ * The API key MUST live in Script Properties, never in this file (the repo is
+ * public). Set it once:  Apps Script editor → Project Settings →
+ * Script Properties → add   ANTHROPIC_API_KEY = sk-ant-...
+ */
+var INSIGHTS_MODEL = 'claude-opus-5';   // change to 'claude-sonnet-5' for lower cost
+
+function askInsights(messagesJson, contextJson) {
+  try {
+    var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
+    if (!key) {
+      return JSON.stringify({
+        success: false,
+        error: 'No Anthropic API key is configured. In the Apps Script editor, open ' +
+               'Project Settings → Script Properties and add ANTHROPIC_API_KEY.'
+      });
+    }
+
+    var messages;
+    try { messages = JSON.parse(messagesJson); } catch (e) { messages = null; }
+    if (!messages || !messages.length) {
+      return JSON.stringify({ success: false, error: 'Please enter a question.' });
+    }
+
+    var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM d, yyyy');
+    var system =
+      'You are a data analyst embedded in the Redis Professional Services (PS) Lifecycle dashboard. ' +
+      'Answer questions strictly from the dashboard data provided below — do not invent numbers or use outside knowledge. ' +
+      'Today is ' + today + '. ' +
+      'Be concise and specific: cite exact figures, account names, project names, and owners straight from the data. ' +
+      'When you count or aggregate, briefly state how. If the data does not contain the answer, say so plainly rather than guessing. ' +
+      'Format money with a leading $ and thousands separators; round hours to whole numbers.\n\n' +
+      'Each sheet below has a description, its column names, a row count, and rows given as arrays aligned to the columns.\n\n' +
+      'DASHBOARD DATA (JSON):\n' + String(contextJson || '{}');
+
+    var payload = {
+      model: INSIGHTS_MODEL,
+      max_tokens: 4096,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'medium' },
+      system: system,
+      messages: messages
+    };
+
+    var resp = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01'
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    var code = resp.getResponseCode();
+    var body = resp.getContentText();
+
+    if (code !== 200) {
+      var msg = 'Claude API error (HTTP ' + code + ')';
+      try {
+        var errObj = JSON.parse(body);
+        if (errObj && errObj.error && errObj.error.message) msg += ': ' + errObj.error.message;
+      } catch (_) {}
+      return JSON.stringify({ success: false, error: msg });
+    }
+
+    var data = JSON.parse(body);
+    if (data.stop_reason === 'refusal') {
+      return JSON.stringify({ success: false, error: 'The request was declined by the model\'s safety system.' });
+    }
+
+    var answer = (data.content || [])
+      .filter(function (b) { return b.type === 'text'; })
+      .map(function (b) { return b.text; })
+      .join('\n')
+      .trim();
+
+    return JSON.stringify({ success: true, answer: answer || '(No answer was returned.)' });
+
+  } catch (err) {
+    return JSON.stringify({ success: false, error: err.toString() });
+  }
+}
+
+/**
  * Returns just the Hours Data sheet rows (used by lazy-load on Utilization tab).
  * Scans sheets for the one containing 'Work: Owner Name' or 'Hours (Number)'.
  */
