@@ -4864,12 +4864,10 @@ function insKey(e) {
 // Build a compact JSON context from the sheets currently loaded in the browser.
 function insBuildContext() {
   var wanted = {
+    hoursData:      'Logged time entries by owner and date — the source data behind billable/PTO utilization',
     activeProjects: 'Open/active PS projects (account, health, hours entitlement vs entered, go-live dates, tier, owner)',
     goLive:         'Go-live tracking (baseline vs actual go-live dates)',
-    annualPlan:     'Annual plan projects (contract start/end dates, utilization ratio, owner)',
-    bookings:       'PS service bookings actuals by fiscal period and region',
-    attachRates:    'PS attach-rate records (PS price vs new ARR by product/region)',
-    cloudUsage:     'Cloud usage rate records'
+    bookings:       'PS service bookings actuals by fiscal period and region'
   };
   var out = { generatedAt: new Date().toISOString(), sheets: {} };
   Object.keys(wanted).forEach(function(k) {
@@ -4920,9 +4918,7 @@ function insAsk() {
   INS_MESSAGES.push({ role: 'user', content: q });
 
   var pending = insAppend('assistant', '');
-  pending.querySelector('.ins-bubble').innerHTML = '<span class="ins-typing">Thinking…</span>';
-
-  var ctx = insBuildContext();
+  var bubble0 = pending.querySelector('.ins-bubble');
 
   function finish() {
     INS_BUSY = false;
@@ -4932,27 +4928,51 @@ function insAsk() {
     thread.scrollTop = thread.scrollHeight;
   }
 
-  google.script.run
-    .withSuccessHandler(function(res) {
-      var data;
-      try { data = JSON.parse(res); } catch (e) { data = { success: false, error: 'Unexpected response from server.' }; }
-      var bubble = pending.querySelector('.ins-bubble');
-      if (data && data.success) {
-        bubble.textContent = data.answer;
-        INS_MESSAGES.push({ role: 'assistant', content: data.answer });
-      } else {
-        bubble.innerHTML = '<span style="color:var(--red)">' + esc((data && data.error) || 'Something went wrong.') + '</span>';
-        INS_MESSAGES.pop();   // drop the unanswered user turn
-      }
-      finish();
-    })
-    .withFailureHandler(function(err) {
-      var bubble = pending.querySelector('.ins-bubble');
-      bubble.innerHTML = '<span style="color:var(--red)">' + esc(String(err && err.message ? err.message : err)) + '</span>';
-      INS_MESSAGES.pop();
-      finish();
-    })
-    .askInsights(JSON.stringify(INS_MESSAGES), ctx);
+  function send() {
+    bubble0.innerHTML = '<span class="ins-typing">Thinking…</span>';
+    var ctx = insBuildContext();
+    google.script.run
+      .withSuccessHandler(function(res) {
+        var data;
+        try { data = JSON.parse(res); } catch (e) { data = { success: false, error: 'Unexpected response from server.' }; }
+        var bubble = pending.querySelector('.ins-bubble');
+        if (data && data.success) {
+          bubble.textContent = data.answer;
+          INS_MESSAGES.push({ role: 'assistant', content: data.answer });
+        } else {
+          bubble.innerHTML = '<span style="color:var(--red)">' + esc((data && data.error) || 'Something went wrong.') + '</span>';
+          INS_MESSAGES.pop();   // drop the unanswered user turn
+        }
+        finish();
+      })
+      .withFailureHandler(function(err) {
+        var bubble = pending.querySelector('.ins-bubble');
+        bubble.innerHTML = '<span style="color:var(--red)">' + esc(String(err && err.message ? err.message : err)) + '</span>';
+        INS_MESSAGES.pop();
+        finish();
+      })
+      .askInsights(JSON.stringify(INS_MESSAGES), ctx);
+  }
+
+  // Hours Data is not part of the initial payload (getAllData skips it) — it is
+  // lazy-loaded on demand. Load it before the first question so the model can
+  // reason over utilization data, then proceed. Hours data is optional context,
+  // so send anyway if the load fails.
+  if (!SHEETS.hoursData && !HOURS_LOADING) {
+    HOURS_LOADING = true;
+    bubble0.innerHTML = '<span class="ins-typing">Loading utilization data…</span>';
+    google.script.run
+      .withSuccessHandler(function(json) {
+        HOURS_LOADING = false;
+        var r; try { r = JSON.parse(json); } catch (e) { r = null; }
+        if (r && r.success && r.rows) SHEETS.hoursData = mkSheet(r.rows);
+        send();
+      })
+      .withFailureHandler(function() { HOURS_LOADING = false; send(); })
+      .getHoursData();
+  } else {
+    send();
+  }
 }
 
 
