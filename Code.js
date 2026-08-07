@@ -89,7 +89,8 @@ var INSIGHTS_ALLOWED = [
   'ken.miller@redis.com',
   'taha.najar@redis.com',
   'kevin.shah@redis.com',
-  'ryne.fagin@redis.com'
+  'ryne.fagin@redis.com',
+  'anthony.gonzales@redis.com'
 ];
 
 // The accessing user's email (empty if it can't be determined — e.g. a user in
