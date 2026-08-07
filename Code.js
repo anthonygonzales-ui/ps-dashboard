@@ -78,8 +78,44 @@ function getAllData() {
  */
 var INSIGHTS_MODEL = 'claude-opus-5';   // change to 'claude-sonnet-5' for lower cost
 
+// Only these users may see and use the Insights tab. Edit this list to change
+// access. Emails are matched case-insensitively.
+var INSIGHTS_ALLOWED = [
+  'steve.jenner@redis.com',
+  'anil.kondapaneni@redis.com',
+  'deji.alaran@redis.com',
+  'michael.ehrig@redis.com',
+  'kumar.venkatasubramanian@redis.com',
+  'ken.miller@redis.com',
+  'taha.najar@redislabs.com',
+  'kevin.shah@redis.com'
+];
+
+// The accessing user's email (empty if it can't be determined — e.g. a user in
+// a different domain than the web-app owner, whose email Apps Script withholds).
+function insCurrentEmail_() {
+  var e = '';
+  try { e = Session.getActiveUser().getEmail() || ''; } catch (_) {}
+  return String(e).trim().toLowerCase();
+}
+
+function insIsAllowed_() {
+  var email = insCurrentEmail_();
+  return !!email && INSIGHTS_ALLOWED.indexOf(email) > -1;
+}
+
+// Called by the client on load to decide whether to show the Insights nav item.
+function getInsightsAccess() {
+  return JSON.stringify({ allowed: insIsAllowed_(), email: insCurrentEmail_() });
+}
+
 function askInsights(messagesJson, contextJson) {
   try {
+    // Hard server-side gate — the UI hiding is only cosmetic.
+    if (!insIsAllowed_()) {
+      return JSON.stringify({ success: false, error: 'You do not have access to the Insights tab.' });
+    }
+
     var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
     if (!key) {
       return JSON.stringify({

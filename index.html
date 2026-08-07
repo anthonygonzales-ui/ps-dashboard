@@ -316,8 +316,8 @@ th { position: relative; }
       <div class="nav-item" onclick="switchTab('team-availability')">
         <span class="nav-icon">👥</span> Team Availability
       </div>
-      <div class="nav-section">Assistant</div>
-      <div class="nav-item" onclick="switchTab('insights')" id="nav-insights">
+      <div class="nav-section" id="nav-section-assistant" style="display:none">Assistant</div>
+      <div class="nav-item" onclick="switchTab('insights')" id="nav-insights" style="display:none">
         <span class="nav-icon">✨</span> Insights
       </div>
     </nav>
@@ -1136,8 +1136,33 @@ function boot(raw, ts) {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('app').style.display     = 'flex';
 
+  // Reveal the Insights tab only for allow-listed users (server-side gated).
+  insCheckAccess();
+
   // Push dashboard-open KPIs to the external tracking sheet
   pushDashboardOpenKPIs();
+}
+
+// Insights tab is restricted to an allow-list. The nav item is hidden by
+// default; the server (getInsightsAccess) decides whether to reveal it. This
+// is only UX — askInsights independently re-checks the allow-list server-side.
+var INS_ALLOWED = false;
+function insCheckAccess() {
+  try {
+    google.script.run
+      .withSuccessHandler(function(json) {
+        var r; try { r = JSON.parse(json); } catch (e) { r = null; }
+        INS_ALLOWED = !!(r && r.allowed);
+        if (INS_ALLOWED) {
+          var nav = document.getElementById('nav-insights');
+          var sec = document.getElementById('nav-section-assistant');
+          if (nav) nav.style.display = '';
+          if (sec) sec.style.display = '';
+        }
+      })
+      .withFailureHandler(function() { /* leave hidden on failure */ })
+      .getInsightsAccess();
+  } catch (e) { /* no-op */ }
 }
 
 function refreshData() {
