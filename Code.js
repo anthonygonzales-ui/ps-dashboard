@@ -87,7 +87,7 @@ var INSIGHTS_ALLOWED = [
   'michael.ehrig@redis.com',
   'kumar.venkatasubramanian@redis.com',
   'ken.miller@redis.com',
-  'taha.najar@redislabs.com',
+  'taha.najar@redis.com',
   'kevin.shah@redis.com',
   'ryne.fagin@redis.com'
 ];
