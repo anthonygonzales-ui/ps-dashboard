@@ -621,9 +621,9 @@ th { position: relative; }
           <div class="filter-group"><label>Ramp Status</label>
             <select id="ut-ramp" onchange="renderUtilization()"><option>All</option></select></div>
           <div class="filter-group"><label>Fiscal Quarter</label>
-            <select id="ut-quarter" onchange="renderUtilization()"><option>All</option></select></div>
+            <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-quarter',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-quarter"></div></div></div>
           <div class="filter-group"><label>Month</label>
-            <select id="ut-month" onchange="renderUtilization()"><option>All</option></select></div>
+            <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-month',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-month"></div></div></div>
           <button class="clear-btn" onclick="clearF('ut')" style="align-self:flex-end">✕ Clear</button>
         </div>
 
@@ -1383,17 +1383,28 @@ function seedHoursFilters(useActual) {
            new Date(parseInt(pb[1]), UT_MONTH_NAMES.indexOf(pb[0]), 1);
   });
 
-  var sel = document.getElementById('ut-quarter');
-  var prev = sel ? sel.value : curQ;
-  fillSel('ut-quarter', quarters);
-  sel = document.getElementById('ut-quarter');
-  if (sel) sel.value = (quarters.indexOf(prev) > -1) ? prev : curQ;
+  // Fiscal Quarter (multi-select). Preserve prior selection across re-seed;
+  // default to the current quarter only on first seed (empty panel).
+  var qPanel   = document.getElementById('msp-ut-quarter');
+  var qSeeded  = qPanel && qPanel.querySelector('input[type=checkbox]');
+  var prevQ    = qSeeded ? gmf('ut-quarter') : null;   // [] means "All" was selected
+  fillMsUT('ut-quarter', quarters);
+  if (!qSeeded) {
+    // First seed → default to current quarter
+    setMsMulti('ut-quarter', quarters.indexOf(curQ) > -1 ? [curQ] : []);
+  } else {
+    // Re-seed → restore, keeping only values that still exist
+    var keepQ = (prevQ || []).filter(function (v) { return quarters.indexOf(v) > -1; });
+    setMsMulti('ut-quarter', keepQ);
+  }
 
-  var mSel  = document.getElementById('ut-month');
-  var prevM = mSel ? mSel.value : 'All';
-  fillSel('ut-month', months);
-  mSel = document.getElementById('ut-month');
-  if (mSel && prevM !== 'All' && months.indexOf(prevM) > -1) mSel.value = prevM;
+  // Month (multi-select). Default All; preserve prior selection across re-seed.
+  var mPanel   = document.getElementById('msp-ut-month');
+  var mSeeded  = mPanel && mPanel.querySelector('input[type=checkbox]');
+  var prevM    = mSeeded ? gmf('ut-month') : [];
+  fillMsUT('ut-month', months);
+  var keepM = (prevM || []).filter(function (v) { return months.indexOf(v) > -1; });
+  setMsMulti('ut-month', keepM);
 }
 
 function fillSel(id, vals) {
@@ -1473,6 +1484,34 @@ function onMsItemAR(key, cb) {
   renderAttachRates();
 }
 
+// Utilization tab — same multi-select logic, re-renders the utilization tab
+function onMsAllUT(key, cb) {
+  if (cb.checked) {
+    var panel = document.getElementById('msp-' + key);
+    panel.querySelectorAll('input[type=checkbox]:not([value="__all__"])').forEach(function(c) { c.checked = false; });
+  }
+  updateMsLabel(key);
+  renderUtilization();
+}
+function onMsItemUT(key, cb) {
+  var panel = document.getElementById('msp-' + key);
+  var allCb = panel.querySelector('input[value="__all__"]');
+  if (cb.checked && allCb) allCb.checked = false;
+  var anyChecked = Array.from(panel.querySelectorAll('input[type=checkbox]:not([value="__all__"])')).some(function(c) { return c.checked; });
+  if (!anyChecked && allCb) allCb.checked = true;
+  updateMsLabel(key);
+  renderUtilization();
+}
+// Fill a UT multi-select panel, wiring the UT onchange handlers.
+function fillMsUT(key, vals) {
+  var panel = document.getElementById('msp-' + key);
+  if (!panel) return;
+  panel.innerHTML = '<label class="ms-item"><input type="checkbox" value="__all__" checked onchange="onMsAllUT(\'' + key + '\',this)"> All</label>' +
+    vals.map(function (v) {
+      return '<label class="ms-item"><input type="checkbox" value="' + esc(v) + '" onchange="onMsItemUT(\'' + key + '\',this)"> ' + esc(v) + '</label>';
+    }).join('');
+}
+
 function updateMsLabel(key) {
   var panel = document.getElementById('msp-' + key);
   var btn   = panel ? panel.previousElementSibling : null;
@@ -1514,6 +1553,19 @@ function setMs(key, val) {
   // Ensure "All" checkbox is unchecked
   var allCb = panel.querySelector('input[value="__all__"]');
   if (allCb) allCb.checked = false;
+  updateMsLabel(key);
+}
+
+// Set a multi-select dropdown to a set of values (empty array → All).
+function setMsMulti(key, vals) {
+  var panel = document.getElementById('msp-' + key);
+  if (!panel) return;
+  var set = {};
+  (vals || []).forEach(function (v) { set[v] = 1; });
+  panel.querySelectorAll('input[type=checkbox]').forEach(function (c) {
+    if (c.value === '__all__') c.checked = !vals || vals.length === 0;
+    else c.checked = !!set[c.value];
+  });
   updateMsLabel(key);
 }
 
@@ -1561,9 +1613,13 @@ function clearF(prefix) {
     ['ar-region','ar-subregion','ar-rectype','ar-arrbucket'].forEach(clearMs);
   }
   if (prefix === 'ut') {
-    ['ut-region','ut-manager','ut-role','ut-ramp','ut-quarter','ut-month'].forEach(function(id) {
-      var el = document.getElementById(id); if (el) el.value = 'All';
-    });
+    // region/manager/role/ramp are <select>s already reset to All above.
+    // Reset the multi-selects: month → All, quarter → current quarter (default).
+    clearMs('ut-month');
+    var _curQ = getFQLabel(new Date());
+    var _qp = document.getElementById('msp-ut-quarter');
+    if (_qp && _qp.querySelector('input[value="' + _curQ + '"]')) setMsMulti('ut-quarter', [_curQ]);
+    else clearMs('ut-quarter');
   }
   renderCurrentTab();
 }
@@ -2686,33 +2742,68 @@ function renderUtilization() {
     return;
   }
 
-  // ── Determine reporting period ──────────────────────────────
+  // ── Determine reporting period(s) ───────────────────────────
+  // Fiscal Quarter and Month are both multi-select. Selecting several yields a
+  // union of (possibly non-adjacent) date ranges; the gap between them is NOT
+  // counted toward working days / available hours. Month still overrides
+  // quarter (more specific): if any months are selected, quarters are ignored.
+  // Default (nothing selected in either) = the current quarter, capped at the
+  // last completed week — matching the tab's original behaviour.
   var today0 = new Date(); today0.setHours(0,0,0,0);
-  var curQLabel   = getFQLabel(today0);
-  var fQuarter    = gf('ut-quarter');
-  var activeQ     = (fQuarter && fQuarter !== 'All') ? fQuarter : curQLabel;
-  var qRange      = getFQRange(activeQ);
-  var periodStart = qRange.start;
-  // Past quarter → full quarter end; current quarter → end of prior completed week (last Saturday)
-  var periodEnd   = (activeQ === curQLabel) ? priorWeekSaturday(today0) : qRange.end;
+  var curQLabel = getFQLabel(today0);
+  var selQ = gmf('ut-quarter');   // [] = "All"
+  var selM = gmf('ut-month');     // [] = "All"
 
-  // Month filter overrides the quarter period when set (more specific)
-  var fMonth = gf('ut-month');
-  if (fMonth && fMonth !== 'All') {
-    var mParts = fMonth.split('-');
-    var mIdx   = UT_MONTH_NAMES.indexOf(mParts[0]);
-    var mYear  = parseInt(mParts[1]);
-    if (mIdx >= 0 && !isNaN(mYear)) {
-      periodStart = new Date(mYear, mIdx, 1);
-      var mLastDay = new Date(mYear, mIdx + 1, 0); // last calendar day of the month
-      mLastDay.setHours(23, 59, 59, 999);
-      // If the month is still in progress, cap at last completed week
-      periodEnd = (mLastDay >= today0) ? priorWeekSaturday(today0) : mLastDay;
-      if (periodEnd < periodStart) periodEnd = new Date(periodStart);
+  var periods = [];               // [{ start, end, label }]
+  if (selM.length) {
+    selM.forEach(function(m) {
+      var mp = m.split('-'), mIdx = UT_MONTH_NAMES.indexOf(mp[0]), mY = parseInt(mp[1]);
+      if (mIdx < 0 || isNaN(mY)) return;
+      var st = new Date(mY, mIdx, 1); st.setHours(0,0,0,0);
+      var last = new Date(mY, mIdx + 1, 0); last.setHours(23,59,59,999); // last calendar day
+      var en = (last >= today0) ? priorWeekSaturday(today0) : last;      // cap in-progress month
+      if (en >= st) periods.push({ start: st, end: en, label: m });
+    });
+  } else if (selQ.length) {
+    selQ.forEach(function(q) {
+      var r = getFQRange(q);
+      var st = new Date(r.start); st.setHours(0,0,0,0);
+      var en = (q === curQLabel) ? priorWeekSaturday(today0) : new Date(r.end);
+      if (en >= st) periods.push({ start: st, end: en, label: q });
+    });
+  }
+  if (!periods.length) {
+    // Default / fallback → current quarter
+    var r0 = getFQRange(curQLabel);
+    periods.push({ start: new Date(r0.start), end: priorWeekSaturday(today0), label: curQLabel });
+  }
+  periods.sort(function(a, b) { return a.start - b.start; });
+
+  var periodLabel = periods.map(function(p) { return p.label; }).join(', ');
+  var periodStart = periods[0].start;                       // overall span start (for display)
+  var periodEnd   = periods[periods.length - 1].end;        // overall span end   (for display)
+  // True if the selection is just the default current quarter (drives sheet push).
+  var isDefaultCurrentQ = (selM.length === 0 &&
+    (selQ.length === 0 || (selQ.length === 1 && selQ[0] === curQLabel)));
+
+  // Is a date inside any selected range?
+  function inAnyPeriod(d) {
+    for (var i = 0; i < periods.length; i++) {
+      if (d >= periods[i].start && d <= periods[i].end) return true;
     }
+    return false;
+  }
+  // Weekdays across all selected ranges, optionally only on/after `fromDate`.
+  function weekdaysAcross(fromDate) {
+    var n = 0;
+    periods.forEach(function(p) {
+      var s = (fromDate && fromDate > p.start) ? fromDate : p.start;
+      if (s <= p.end) n += countWeekdays(s, p.end);
+    });
+    return n;
   }
 
-  var workingDays  = countWeekdays(periodStart, periodEnd);
+  var workingDays  = weekdaysAcross(null);
   var workingHours = workingDays * 8;
 
   // ── Hours data column indices ────────────────────────────────
@@ -2733,7 +2824,7 @@ function renderUtilization() {
     if (!ds) return;
     var d = new Date(ds); if (isNaN(d)) return;
     d.setHours(0,0,0,0);
-    if (d < periodStart || d > periodEnd) return;
+    if (!inAnyPeriod(d)) return;
     var key = name.toLowerCase();
     if (!hoursMap[key]) hoursMap[key] = [];
     hoursMap[key].push(r);
@@ -2756,32 +2847,32 @@ function renderUtilization() {
     var startStr = iUS >= 0 ? String(r[iUS]||'').trim() : '';
     var startD   = startStr ? new Date(startStr) : null;
 
-    // Ramp status evaluated at the period end date — drives display badge
+    // Ramp status evaluated at the overall period end — drives display badge
     var rampAtPeriod = (startD && !isNaN(startD))
       ? (periodEnd < new Date(startD.getTime() + 90*86400000) ? 'Ramping' : 'Ramped')
       : '';
 
-    // Per-person effective start: max(periodStart, startDate + 90 days)
-    // Working hours only count from when the person finished ramping
+    // Per-person ramp cutoff: hours/working-days only count on/after the day
+    // the person finished ramping (startDate + 90 days). null = no cutoff.
     var rampEndDate = (startD && !isNaN(startD))
       ? new Date(startD.getTime() + 90*86400000)
       : null;
-    var effectiveStart = (rampEndDate && rampEndDate > periodStart)
-      ? rampEndDate
-      : periodStart;
-    effectiveStart.setHours(0,0,0,0);
+    if (rampEndDate) rampEndDate.setHours(0,0,0,0);
 
-    var effectiveWorkDays = countWeekdays(effectiveStart, periodEnd);
+    // Working days = weekdays across all selected ranges on/after the ramp cutoff.
+    var effectiveWorkDays = weekdaysAcross(rampEndDate);
     var effectiveWorkHrs  = effectiveWorkDays * 8;
 
-    // Filter hours rows to those on/after effective start
+    // Hours rows are already limited to selected ranges (hoursMap); drop any
+    // before the ramp cutoff.
     var allHrsRows = hoursMap[fullName.toLowerCase()] || [];
     var hrsRows = allHrsRows.filter(function(hr) {
+      if (!rampEndDate) return true;
       var ds = iHrsDate >= 0 ? String(hr[iHrsDate]||'').trim() : '';
       if (!ds) return true; // keep if no date (shouldn't happen)
       var d = new Date(ds); if (isNaN(d)) return true;
       d.setHours(0,0,0,0);
-      return d >= effectiveStart;
+      return d >= rampEndDate;
     });
 
     // ── Compute hours ─────────────────────────────────────────
@@ -2885,10 +2976,10 @@ function renderUtilization() {
 
   document.getElementById('ut-kpi-billable').style.color = billCol;
   document.getElementById('ut-kpi-pto').style.color      = ptoCol;
-  document.getElementById('ut-tbl-title').textContent    = 'Utilization by Resource (' + total + ') — ' + activeQ;
+  document.getElementById('ut-tbl-title').textContent    = 'Utilization by Resource (' + total + ') — ' + periodLabel;
 
-  // ── Push utilization KPIs to external sheet (current quarter only) ──
-  if (activeQ === curQLabel) {
+  // ── Push utilization KPIs to external sheet (default current quarter only) ──
+  if (isDefaultCurrentQ) {
     var utKpis = [];
     if (avgBillUtil !== null) utKpis.push({ cell: 'A4', value: Math.round(avgBillUtil) / 100 });
     if (avgPTOUtil  !== null) utKpis.push({ cell: 'C4', value: Math.round(avgPTOUtil)  / 100 });
@@ -3000,12 +3091,17 @@ function renderUtilization() {
       return MON_NAMES[s.getMonth()] + ' ' + s.getDate() + '–' + e.getDate();
     }
 
-    // Per-week expected hours: working days that fall inside the period × 8
-    // Handles partial first/last weeks that straddle the period boundary
+    // Per-week expected hours: working days that fall inside ANY selected range × 8.
+    // Sums the week's overlap with every selected period, so weeks that land in a
+    // gap between non-adjacent selections get 0 (rendered dim, no expectation).
     var weekExpected = weeks.map(function(w) {
-      var overlapStart = w.start < periodStart ? periodStart : w.start;
-      var overlapEnd   = w.end   > periodEnd   ? periodEnd   : w.end;
-      return countWeekdays(overlapStart, overlapEnd) * 8;
+      var wd = 0;
+      periods.forEach(function(p) {
+        var overlapStart = w.start < p.start ? p.start : w.start;
+        var overlapEnd   = w.end   > p.end   ? p.end   : w.end;
+        if (overlapStart <= overlapEnd) wd += countWeekdays(overlapStart, overlapEnd);
+      });
+      return wd * 8;
     });
 
     // Header row — show expected hours in sub-label for partial weeks
@@ -3023,7 +3119,7 @@ function renderUtilization() {
     '</tr>';
 
     document.getElementById('ut-weekly-title').textContent =
-      'Missing Timecards — ' + activeQ;
+      'Missing Timecards — ' + periodLabel;
 
     if (rows.length === 0) {
       wBody.innerHTML = '<tr><td colspan="' + (weeks.length + 2) + '" class="empty">No records match the selected filters.</td></tr>';
