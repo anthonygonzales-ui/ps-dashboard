@@ -1229,9 +1229,9 @@ function hi(sheet, name) {
 // ════════════════════════════════════════════════════════════
 // STAGE COMPUTATION
 // ════════════════════════════════════════════════════════════
-function computeStage(r, iOnHold, iHandoff, iKickoff, iEntered, iActGL, iOppRecType) {
-  // On Hold supersedes everything — accept 1, "1", true, or "True"
-  if (iOnHold >= 0) { var _oh = String(r[iOnHold] || '').trim().toLowerCase(); if (_oh === '1' || _oh === 'true') return 'On Hold'; }
+function computeStage(r, iPSStatus, iHandoff, iKickoff, iEntered, iActGL, iOppRecType) {
+  // On Hold supersedes everything — driven by the PS Project Status field.
+  if (iPSStatus >= 0 && String(r[iPSStatus] || '').trim().toLowerCase() === 'on hold') return 'On Hold';
 
   var handoff   = iHandoff    >= 0 ? String(r[iHandoff]    || '').trim() : '';
   var kickoff   = iKickoff    >= 0 ? String(r[iKickoff]    || '').trim() : '';
@@ -1250,6 +1250,22 @@ function computeStage(r, iOnHold, iHandoff, iKickoff, iEntered, iActGL, iOppRecT
   return 'Other';
 }
 
+// PS Project Status column — replaces the legacy "On Hold" checkbox and the old
+// "Project Status" field. Falls back to "Project Status" if a report hasn't been
+// swapped yet.
+function hiPSStatus(s) {
+  var i = hi(s, 'PS Project Status');
+  if (i < 0) i = hi(s, 'Project Status');
+  return i;
+}
+
+// On-Hold Reason column (best-effort — exact header name may vary by report).
+function hiHoldReason(s) {
+  var names = ['On Hold Reason', 'PS On Hold Reason', 'On-Hold Reason', 'Hold Reason', 'PS Hold Reason'];
+  for (var k = 0; k < names.length; k++) { var i = hi(s, names[k]); if (i >= 0) return i; }
+  return -1;
+}
+
 // ════════════════════════════════════════════════════════════
 // FILTER SEEDS
 // ════════════════════════════════════════════════════════════
@@ -1263,7 +1279,7 @@ function seedFilters() {
     fillMs('ap-health',  uniq(s.data, hi(s,'Health')));
     fillMs('ap-prodtype', uniq(s.data, hi(s,'Opportunity: Product Type')));
     // Stage — derived from project data fields
-    var _sOnHold   = hi(s,'On Hold');
+    var _sOnHold   = hiPSStatus(s);
     var _sHandoff  = hi(s,'Sales to PS Handoff Date');
     var _sKickoff  = hi(s,'Project Kickoff Date');
     var _sEntered  = hi(s,'Entered Hours');
@@ -1689,8 +1705,9 @@ function renderActiveProjects() {
   var iRegion   = hi(s,'Region');
   var iAccount  = hi(s,'Account');
   var iProjN    = hi(s,'Project: Project Name');
-  var iStatus   = hi(s,'Project Status');
-  var iOnHold   = hi(s,'On Hold');
+  var iStatus   = hiPSStatus(s);
+  var iOnHold   = iStatus;              // on-hold now derives from PS Project Status
+  var iHoldRsn  = hiHoldReason(s);
   var iOwner    = hi(s,'Project: Owner Name');
   var iConsult  = hi(s,'Primary Consultant');
   var iHrsEnt   = hi(s,'Customer Hours Entitlement');
@@ -1788,7 +1805,7 @@ function renderActiveProjects() {
     kpiCard('🤝', 'Awaiting Handoff',             awaitHandoff,         pct(awaitHandoff, total) + '%',     'c-yellow', 'No handoff date, no kickoff date, and no hours logged') +
     kpiCard('🎯', 'Awaiting Kickoff',             awaitKickoff,         pct(awaitKickoff, total) + '%',     'c-orange', 'Handoff date set, but no kickoff date yet') +
     kpiCard('🔄', 'In Progress',                  inProg,               pct(inProg, total) + '%',           'c-green',  'Kickoff date or actual go live date is set') +
-    kpiCard('⏸️', 'On Hold',                      onHoldCount,          pct(onHoldCount, total) + '%',      'c-red',    'On Hold flag is set') +
+    kpiCard('⏸️', 'On Hold',                      onHoldCount,          pct(onHoldCount, total) + '%',      'c-red',    'PS Project Status is "On Hold"') +
     kpiCard('🚀', 'New Logo Awaiting Go Live',    nlAwaitGL,            pct(nlAwaitGL, total) + '%',        'c-blue',   'New logo record, hours logged, no actual go live date') +
     kpiCard('✅', 'New Logo Live / Awaiting Closure', nlLiveAwaitClose, pct(nlLiveAwaitClose, total) + '%', 'c-purple', 'New logo record, actual go live date set, hours logged') +
     kpiCard('⏱️', 'Total Hours Remaining',        Math.round(totalHrsRem).toLocaleString(), null, 'c-teal');
@@ -1805,8 +1822,9 @@ function renderActiveProjects() {
     var account  = esc(String(r[iAccount]  || ''));
     var projN    = esc(String(r[iProjN]    || ''));
     var oppId    = iOppId >= 0 ? String(r[iOppId] || '').trim() : '';
-    var _ohv = String(r[iOnHold] || '').trim().toLowerCase(); var onHold = (_ohv === '1' || _ohv === 'true');
-    var status   = onHold ? 'On Hold' : String(r[iStatus] || '');
+    var status   = iStatus >= 0 ? String(r[iStatus] || '').trim() : '';
+    var onHold   = status.toLowerCase() === 'on hold';
+    var holdReason = (onHold && iHoldRsn >= 0) ? String(r[iHoldRsn] || '').trim() : '';
     var owner    = esc(String(r[iOwner]    || ''));
     var consult  = esc(String(r[iConsult]  || ''));
     var health   = String(r[iHealth]  || '');
@@ -1840,7 +1858,7 @@ function renderActiveProjects() {
       '<td title="' + account + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + account + '</td>' +
       '<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + projN + '">' + (oppId ? '<a href="https://redis.lightning.force.com/lightning/r/project_cloud__Project__c/' + oppId + '/view" target="_blank" style="color:var(--red);text-decoration:none;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + projN + '</a>' : projN) + '</td>' +
       '<td>' + tierBadge(tier) + '</td>' +
-      '<td>' + stageBadge(stage) + '</td>' +
+      '<td' + (onHold && holdReason ? ' title="On hold: ' + esc(holdReason) + '" style="cursor:help"' : '') + '>' + stageBadge(stage) + '</td>' +
       disCell +
       '<td>' + owner   + '</td>' +
       '<td>' + consult + '</td>' +
@@ -1884,10 +1902,10 @@ function renderGoLives() {
   if (iCloseD < 0) iCloseD = hi(s,'Opp Close Date');
 
   // Stage computation columns (shared with Active Projects logic)
-  var iGlStatus   = hi(s,'Project Status');
+  var iGlStatus   = hiPSStatus(s);      // PS Project Status (falls back to Project Status)
   if (iGlStatus < 0) iGlStatus = hi(s,'Status');
   if (iGlStatus < 0) iGlStatus = hi(s,'Project: Status');
-  var iGlOnHold   = hi(s,'On Hold');
+  var iGlOnHold   = iGlStatus;          // on-hold now derives from PS Project Status
   var iGlHandoff  = hi(s,'Sales to PS Handoff Date');
   var iGlKickoff  = hi(s,'Project Kickoff Date');
   var iGlEntered  = hi(s,'Entered Hours');
@@ -6132,7 +6150,7 @@ function buildLookbackPayload(qLabel, fy, utilPayload) {
   (function () {
     var s = SHEETS.activeProjects; if (!s) return;
     var iRg = hi(s,'Region');
-    var iOH = hi(s,'On Hold'), iHO = hi(s,'Sales to PS Handoff Date'), iKO = hi(s,'Project Kickoff Date'),
+    var iOH = hiPSStatus(s), iHO = hi(s,'Sales to PS Handoff Date'), iKO = hi(s,'Project Kickoff Date'),
         iEn = hi(s,'Entered Hours'), iGL = hi(s,'Actual Go Live Date'), iOT = hi(s,'Opportunity: Opportunity Record Type');
     s.data.forEach(function (r) {
       var g = _lbGeo(r[iRg]); if (!g || !bl[g]) return;
@@ -6226,7 +6244,7 @@ function buildActiveProjectsPayload() {
   var iAccount = hi(s,'Account');
   var iProjN   = hi(s,'Project: Project Name');
   var iOwner   = hi(s,'Project: Owner Name');
-  var iOnHold  = hi(s,'On Hold');
+  var iOnHold  = hiPSStatus(s);
   var iHandoff = hi(s,'Sales to PS Handoff Date');
   var iKickoff = hi(s,'Project Kickoff Date');
   var iEntered = hi(s,'Entered Hours');
