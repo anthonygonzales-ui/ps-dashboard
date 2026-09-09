@@ -379,7 +379,7 @@ th { position: relative; }
                 <th onclick="srt('ap',1)">Project Name ↕</th>
                 <th onclick="srt('ap',2)">Project Tier ↕</th>
                 <th onclick="srt('ap',3)">Stage ↕</th>
-                <th onclick="srt('ap',4)" style="white-space:nowrap">In Stage ↕</th>
+                <th onclick="srt('ap',4)">On Hold Reason ↕</th>
                 <th onclick="srt('ap',5)">Owner ↕</th>
                 <th onclick="srt('ap',6)">Primary Consultant ↕</th>
                 <th onclick="srt('ap',7)">Health ↕</th>
@@ -1840,26 +1840,19 @@ function renderActiveProjects() {
     var cend     = esc(String(r[iCEnd]    || ''));
     var prodType = iProdType >= 0 ? esc(String(r[iProdType] || '')) : '';
 
-    // ── Days in current stage ───────────────────────────────────────────────
     var stage = computeStage(r, iOnHold, iHandoff, iKickoff, iEntered, iActGL, iOppRecType);
-    var stageEntryDate = '';
-    if      (stage === 'Awaiting Handoff')               stageEntryDate = String(r[iCloseD]  || '').trim();
-    else if (stage === 'Awaiting Kickoff')                stageEntryDate = String(r[iHandoff] || '').trim();
-    else if (stage === 'In Progress')                     stageEntryDate = String(r[iKickoff] || '').trim();
-    else if (stage === 'New Logo Awaiting Go Live')       stageEntryDate = String(r[iKickoff] || '').trim();
-    else if (stage === 'New Logo Live / Awaiting Closure') stageEntryDate = String(r[iActGL]  || '').trim();
-    // On Hold: no reliable "entered hold" date in the data — show —
-    var dis = stageEntryDate ? daysAgo(stageEntryDate) : null;
-    var disCell = (dis !== null)
-      ? '<td style="text-align:right;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap">' + dis + 'd</td>'
-      : '<td style="text-align:right;color:rgba(255,255,255,0.35)">—</td>';
+
+    // On Hold Reason cell (only populated when the project is On Hold)
+    var reasonCell = (onHold && holdReason)
+      ? '<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(holdReason) + '">' + esc(holdReason) + '</td>'
+      : '<td style="color:rgba(255,255,255,0.35)">—</td>';
 
     return '<tr>' +
       '<td title="' + account + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + account + '</td>' +
       '<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + projN + '">' + (oppId ? '<a href="https://redis.lightning.force.com/lightning/r/project_cloud__Project__c/' + oppId + '/view" target="_blank" style="color:var(--red);text-decoration:none;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + projN + '</a>' : projN) + '</td>' +
       '<td>' + tierBadge(tier) + '</td>' +
-      '<td' + (onHold && holdReason ? ' title="On hold: ' + esc(holdReason) + '" style="cursor:help"' : '') + '>' + stageBadge(stage) + '</td>' +
-      disCell +
+      '<td>' + stageBadge(stage) + '</td>' +
+      reasonCell +
       '<td>' + owner   + '</td>' +
       '<td>' + consult + '</td>' +
       '<td>' + healthBadge(health) + '</td>' +
