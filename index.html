@@ -1521,6 +1521,14 @@ function onMsItemAR(key, cb) {
   renderAttachRates();
 }
 
+// Every option value in a multi-select panel (ignores the "All" checkbox).
+function msAllValues(key) {
+  var panel = document.getElementById('msp-' + key);
+  if (!panel) return [];
+  return Array.from(panel.querySelectorAll('input[type=checkbox]:not([value="__all__"])'))
+    .map(function(c) { return c.value; });
+}
+
 // Utilization tab — same multi-select logic, re-renders the utilization tab
 function onMsAllUT(key, cb) {
   if (cb.checked) {
@@ -2796,8 +2804,12 @@ function renderUtilization() {
       var en = (last >= today0) ? priorWeekSaturday(today0) : last;      // cap in-progress month
       if (en >= st) periods.push({ start: st, end: en, label: m });
     });
-  } else if (selQ.length) {
-    selQ.forEach(function(q) {
+  } else {
+    // Quarter dimension. An empty selQ means the "All" option is chosen → use
+    // every quarter in the filter (the entire available date frame), not just
+    // the current quarter.
+    var quartersToUse = selQ.length ? selQ : msAllValues('ut-quarter');
+    quartersToUse.forEach(function(q) {
       var r = getFQRange(q);
       var st = new Date(r.start); st.setHours(0,0,0,0);
       var en = (q === curQLabel) ? priorWeekSaturday(today0) : new Date(r.end);
@@ -2805,18 +2817,18 @@ function renderUtilization() {
     });
   }
   if (!periods.length) {
-    // Default / fallback → current quarter
+    // Fallback → current quarter
     var r0 = getFQRange(curQLabel);
     periods.push({ start: new Date(r0.start), end: priorWeekSaturday(today0), label: curQLabel });
   }
   periods.sort(function(a, b) { return a.start - b.start; });
 
-  var periodLabel = periods.map(function(p) { return p.label; }).join(', ');
+  var allQuarters = (selM.length === 0 && selQ.length === 0);   // "All" quarters chosen
+  var periodLabel = allQuarters ? 'All quarters' : periods.map(function(p) { return p.label; }).join(', ');
   var periodStart = periods[0].start;                       // overall span start (for display)
   var periodEnd   = periods[periods.length - 1].end;        // overall span end   (for display)
-  // True if the selection is just the default current quarter (drives sheet push).
-  var isDefaultCurrentQ = (selM.length === 0 &&
-    (selQ.length === 0 || (selQ.length === 1 && selQ[0] === curQLabel)));
+  // True only when the selection is exactly the current quarter (drives sheet push).
+  var isDefaultCurrentQ = (selM.length === 0 && selQ.length === 1 && selQ[0] === curQLabel);
 
   // Is a date inside any selected range?
   function inAnyPeriod(d) {
