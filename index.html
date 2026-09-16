@@ -155,6 +155,8 @@ select:focus { outline: none; border-color: var(--red); }
 .ut-trend-btn:hover { color:var(--text); }
 .ut-trend-btn.active { background:var(--red); color:#fff; font-weight:600; }
 #ut-trend-canvas { max-height:none !important; }
+.utf-group { display:flex; flex-direction:column; gap:4px; }
+.utf-group > label { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; }
 tr.ut-data-row:hover > td { background:var(--bg-card) !important; }
 tr.ut-detail-row > td { padding:0; border-bottom:1px solid var(--border); }
 .ut-detail-panel { padding:10px 16px 14px 36px; background:var(--bg-page); }
@@ -730,15 +732,23 @@ th { position: relative; }
 
         <!-- Utilization trend by month -->
         <div class="chart-card" style="margin-top:20px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
             <span style="font-size:12.5px;font-weight:600">Utilization Trend by Month</span>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-trend-res',event)"><span class="ms-label">All resources</span></button><div class="ms-panel" id="msp-ut-trend-res"></div></div>
-              <div class="ut-trend-toggle">
-                <button id="ut-trend-btn-aggregate" class="ut-trend-btn active" onclick="toggleUtTrend('aggregate')">Team</button>
-                <button id="ut-trend-btn-person" class="ut-trend-btn" onclick="toggleUtTrend('person')">By Person</button>
-              </div>
+            <div class="ut-trend-toggle">
+              <button id="ut-trend-btn-aggregate" class="ut-trend-btn active" onclick="toggleUtTrend('aggregate')">Team</button>
+              <button id="ut-trend-btn-person" class="ut-trend-btn" onclick="toggleUtTrend('person')">By Person</button>
             </div>
+          </div>
+          <!-- Chart-only filters (independent of the tab filters above) -->
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+            <div class="utf-group"><label>Region</label>
+              <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-trend-region',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-trend-region"></div></div></div>
+            <div class="utf-group"><label>Role</label>
+              <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-trend-role',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-trend-role"></div></div></div>
+            <div class="utf-group"><label>Fiscal Quarter</label>
+              <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-trend-quarter',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-trend-quarter"></div></div></div>
+            <div class="utf-group"><label>Resource</label>
+              <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-trend-res',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-trend-res"></div></div></div>
           </div>
           <div style="position:relative;height:340px">
             <canvas id="ut-trend-canvas"></canvas>
@@ -1378,6 +1388,7 @@ function seedFilters() {
 var UT_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 function seedHoursFilters(useActual) {
+  UT_TREND_SEEDED = false;   // let the trend chart's own filters reseed from fresh data
   var today0 = new Date(); today0.setHours(0,0,0,0);
   var curQ = getFQLabel(today0);
   var quarters = [];
@@ -1525,29 +1536,44 @@ function onMsItemAR(key, cb) {
 }
 
 // Trend chart resource filter — chart-only, so it re-draws without recomputing the tab.
-function onMsAllTrend(key, cb) {
+// Shared multi-select toggle mechanics (no re-render — caller decides).
+function _msToggleAll(key, cb) {
   if (cb.checked) {
     var panel = document.getElementById('msp-' + key);
     panel.querySelectorAll('input[type=checkbox]:not([value="__all__"])').forEach(function(c) { c.checked = false; });
   }
   updateMsLabel(key);
-  drawUtTrend();
 }
-function onMsItemTrend(key, cb) {
+function _msToggleItem(key, cb) {
   var panel = document.getElementById('msp-' + key);
   var allCb = panel.querySelector('input[value="__all__"]');
   if (cb.checked && allCb) allCb.checked = false;
   var anyChecked = Array.from(panel.querySelectorAll('input[type=checkbox]:not([value="__all__"])')).some(function(c) { return c.checked; });
   if (!anyChecked && allCb) allCb.checked = true;
   updateMsLabel(key);
-  drawUtTrend();
 }
+
+// Chart resource filter → redraw only (options don't change).
+function onMsAllTrend(key, cb)  { _msToggleAll(key, cb);  drawUtTrend(); }
+function onMsItemTrend(key, cb) { _msToggleItem(key, cb); drawUtTrend(); }
 function fillMsTrend(key, vals) {
   var panel = document.getElementById('msp-' + key);
   if (!panel) return;
   panel.innerHTML = '<label class="ms-item"><input type="checkbox" value="__all__" checked onchange="onMsAllTrend(\'' + key + '\',this)"> All</label>' +
     vals.map(function (v) {
       return '<label class="ms-item"><input type="checkbox" value="' + esc(v) + '" onchange="onMsItemTrend(\'' + key + '\',this)"> ' + esc(v) + '</label>';
+    }).join('');
+}
+
+// Chart region/role/quarter filters → recompute the whole trend.
+function onMsAllTrendR(key, cb)  { _msToggleAll(key, cb);  renderUtTrend(); }
+function onMsItemTrendR(key, cb) { _msToggleItem(key, cb); renderUtTrend(); }
+function fillMsTrendR(key, vals) {
+  var panel = document.getElementById('msp-' + key);
+  if (!panel) return;
+  panel.innerHTML = '<label class="ms-item"><input type="checkbox" value="__all__" checked onchange="onMsAllTrendR(\'' + key + '\',this)"> All</label>' +
+    vals.map(function (v) {
+      return '<label class="ms-item"><input type="checkbox" value="' + esc(v) + '" onchange="onMsItemTrendR(\'' + key + '\',this)"> ' + esc(v) + '</label>';
     }).join('');
 }
 
@@ -2889,15 +2915,7 @@ function renderUtilization() {
   var iHrsPT   = hi(s,'Project Type');
   var iHrsAdm  = hi(s,'Administration Type');
 
-  // Billable: (project not blank AND type ≠ internal) OR admin type is one of
-  // Program Management / General Product Issues / Customer Travel.
-  function utIsBillable(hr) {
-    var proj  = iHrsProj >= 0 ? String(hr[iHrsProj]||'').trim() : '';
-    var ptype = iHrsPT   >= 0 ? String(hr[iHrsPT]  ||'').trim().toLowerCase() : '';
-    var adm   = iHrsAdm  >= 0 ? String(hr[iHrsAdm] ||'').trim().toLowerCase() : '';
-    var isBillableAdm = adm === 'program management' || adm === 'general product issues' || adm === 'customer travel';
-    return (proj !== '' && ptype !== 'internal') || isBillableAdm;
-  }
+  function utIsBillable(hr) { return psIsBillable(hr, iHrsProj, iHrsPT, iHrsAdm); }
 
   // ── Build per-person hours list, filtered to the period ─────
   var hoursMap = {};   // name.toLowerCase() → [rows in period]
@@ -3069,7 +3087,7 @@ function renderUtilization() {
 
   if (rows.length === 0) {
     el.innerHTML = '<tr><td colspan="12" class="empty">No records match the selected filters.</td></tr>';
-    UT_TREND = null; drawUtTrend();
+    renderUtTrend();   // chart has its own filters — render it regardless
     return;
   }
 
@@ -3277,72 +3295,146 @@ function renderUtilization() {
     }).join('');
   })();
 
-  // ── Utilization trend by month (drives the line chart at the bottom) ──
-  // Respects the current filters (rows) and the selected period(s). Builds one
-  // calendar-month bucket per month overlapping a selected range; utilization =
-  // billable hours / expected working hours within that month.
-  (function() {
-    // Distinct months overlapping the selected ranges, each clipped to the range.
-    var monthMap = {};   // 'YYYY-M' → { y, m, cs, ce }
-    periods.forEach(function(p) {
-      var cur = new Date(p.start.getFullYear(), p.start.getMonth(), 1);
-      while (cur <= p.end) {
-        var y = cur.getFullYear(), mo = cur.getMonth();
-        var mStart = new Date(y, mo, 1); mStart.setHours(0,0,0,0);
-        var mEnd   = new Date(y, mo + 1, 0); mEnd.setHours(23,59,59,999);
-        var cs = mStart < p.start ? p.start : mStart;
-        var ce = mEnd   > p.end   ? p.end   : mEnd;
-        if (cs <= ce) {
-          var key = y + '-' + mo;
-          if (!monthMap[key]) monthMap[key] = { y: y, m: mo, cs: cs, ce: ce };
-          else { if (cs < monthMap[key].cs) monthMap[key].cs = cs; if (ce > monthMap[key].ce) monthMap[key].ce = ce; }
-        }
-        cur = new Date(y, mo + 1, 1);
+  // The trend chart has its own independent filter set — render it separately.
+  renderUtTrend();
+}
+
+// Billable test (shared): (project not blank AND type ≠ internal) OR admin type
+// is Program Management / General Product Issues / Customer Travel.
+function psIsBillable(hr, iProj, iPT, iAdm) {
+  var proj  = iProj >= 0 ? String(hr[iProj]||'').trim() : '';
+  var ptype = iPT   >= 0 ? String(hr[iPT]  ||'').trim().toLowerCase() : '';
+  var adm   = iAdm  >= 0 ? String(hr[iAdm] ||'').trim().toLowerCase() : '';
+  var isBillableAdm = adm === 'program management' || adm === 'general product issues' || adm === 'customer travel';
+  return (proj !== '' && ptype !== 'internal') || isBillableAdm;
+}
+
+// ── Utilization trend chart — computes its OWN view from the full data using a
+// dedicated filter set (region / role / fiscal quarter / resource), independent
+// of the tab's main filters. ─────────────────────────────────────────────────
+var UT_TREND_SEEDED = false;
+
+// Seed the chart's region / role / fiscal-quarter filters (once per data load).
+function utTrendSeedFilters() {
+  if (UT_TREND_SEEDED) return;
+  var hs = SHEETS.hoursData, us = SHEETS.psUserRecords;
+  if (!hs || !us) return;
+  var regions = uniq(us.data, hi(us,'Region'));
+  var iDate = hi(hs,'Date'), qset = {};
+  hs.data.forEach(function(r) {
+    var ds = iDate >= 0 ? String(r[iDate]||'').trim() : ''; if (!ds) return;
+    var d = new Date(ds); if (isNaN(d)) return;
+    qset[getFQLabel(d)] = 1;
+  });
+  var quarters = Object.keys(qset).sort(function(a, b) { return getFQRange(a).start - getFQRange(b).start; });
+  fillMsTrendR('ut-trend-region',  regions);
+  fillMsTrendR('ut-trend-role',    ['Consultant','Engagement Manager']);
+  fillMsTrendR('ut-trend-quarter', quarters);
+  UT_TREND_SEEDED = true;
+}
+
+function renderUtTrend() {
+  var hs = SHEETS.hoursData, us = SHEETS.psUserRecords;
+  if (!hs || !us) { UT_TREND = null; drawUtTrend(); return; }
+  utTrendSeedFilters();
+
+  var today0 = new Date(); today0.setHours(0,0,0,0);
+  var curQ = getFQLabel(today0);
+
+  // Reporting period(s) from the chart's fiscal-quarter filter ([] = All quarters).
+  var selQ = gmf('ut-trend-quarter');
+  var quartersToUse = selQ.length ? selQ : msAllValues('ut-trend-quarter');
+  var periods = [];
+  quartersToUse.forEach(function(q) {
+    var r = getFQRange(q);
+    var st = new Date(r.start); st.setHours(0,0,0,0);
+    var en = (q === curQ) ? priorWeekSaturday(today0) : new Date(r.end);
+    if (en >= st) periods.push({ start: st, end: en, label: q });
+  });
+  if (!periods.length) { var r0 = getFQRange(curQ); periods.push({ start: new Date(r0.start), end: priorWeekSaturday(today0), label: curQ }); }
+  periods.sort(function(a, b) { return a.start - b.start; });
+  function inAnyPeriod(d) { for (var i = 0; i < periods.length; i++) { if (d >= periods[i].start && d <= periods[i].end) return true; } return false; }
+
+  // Month buckets (clipped to periods).
+  var monthMap = {};
+  periods.forEach(function(p) {
+    var cur = new Date(p.start.getFullYear(), p.start.getMonth(), 1);
+    while (cur <= p.end) {
+      var y = cur.getFullYear(), mo = cur.getMonth();
+      var mStart = new Date(y, mo, 1); mStart.setHours(0,0,0,0);
+      var mEnd   = new Date(y, mo + 1, 0); mEnd.setHours(23,59,59,999);
+      var cs = mStart < p.start ? p.start : mStart;
+      var ce = mEnd   > p.end   ? p.end   : mEnd;
+      if (cs <= ce) {
+        var key = y + '-' + mo;
+        if (!monthMap[key]) monthMap[key] = { y: y, m: mo, cs: cs, ce: ce };
+        else { if (cs < monthMap[key].cs) monthMap[key].cs = cs; if (ce > monthMap[key].ce) monthMap[key].ce = ce; }
       }
-    });
-    var monthKeys = Object.keys(monthMap).sort(function(a, b) {
-      return new Date(monthMap[a].y, monthMap[a].m, 1) - new Date(monthMap[b].y, monthMap[b].m, 1);
-    });
-    var MON3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    var labels = monthKeys.map(function(k) { return MON3[monthMap[k].m] + ' ' + monthMap[k].y; });
+      cur = new Date(y, mo + 1, 1);
+    }
+  });
+  var monthKeys = Object.keys(monthMap).sort(function(a, b) { return new Date(monthMap[a].y, monthMap[a].m, 1) - new Date(monthMap[b].y, monthMap[b].m, 1); });
+  var MON3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var labels = monthKeys.map(function(k) { return MON3[monthMap[k].m] + ' ' + monthMap[k].y; });
 
-    // Per-person billable + working hours per month.
-    var people = rows.map(function(e) {
-      var hrsRows = hoursMap[e.resource.toLowerCase()] || [];
-      var data = monthKeys.map(function(k) {
-        var mm = monthMap[k];
-        // Working hours: weekdays in the clipped month on/after the ramp cutoff × 8.
-        var ws = (e.rampEndDate && e.rampEndDate > mm.cs) ? e.rampEndDate : mm.cs;
-        var workHrs = (ws <= mm.ce) ? countWeekdays(ws, mm.ce) * 8 : 0;
-        // Billable hours logged inside the clipped month, on/after the ramp cutoff.
-        var billHrs = 0;
-        hrsRows.forEach(function(hr) {
-          var ds = iHrsDate >= 0 ? String(hr[iHrsDate]||'').trim() : '';
-          if (!ds) return;
-          var d = new Date(ds); if (isNaN(d)) return;
-          d.setHours(0,0,0,0);
-          if (d < mm.cs || d > mm.ce) return;
-          if (e.rampEndDate && d < e.rampEndDate) return;
-          if (utIsBillable(hr)) billHrs += (iHrsHrs >= 0 ? (parseFloat(hr[iHrsHrs]) || 0) : 0);
-        });
-        return { work: workHrs, bill: billHrs };
+  // Hours data → per-person rows within the chart's periods.
+  var iName = hi(hs,'Work: Owner Name'); if (iName < 0) iName = hi(hs,'Work Owner Name');
+  var iDate = hi(hs,'Date'), iHrs = hi(hs,'Hours (Number)');
+  var iProj = hi(hs,'Project (Rollup)'), iPT = hi(hs,'Project Type'), iAdm = hi(hs,'Administration Type');
+  var hoursMap = {};
+  hs.data.forEach(function(r) {
+    var name = iName >= 0 ? String(r[iName]||'').trim() : ''; if (!name) return;
+    var ds = iDate >= 0 ? String(r[iDate]||'').trim() : ''; if (!ds) return;
+    var d = new Date(ds); if (isNaN(d)) return; d.setHours(0,0,0,0);
+    if (!inAnyPeriod(d)) return;
+    var key = name.toLowerCase(); (hoursMap[key] = hoursMap[key] || []).push(r);
+  });
+
+  // Users → enriched people, filtered by the chart's region / role.
+  var iUN = hi(us,'Full Name'); if (iUN < 0) iUN = hi(us,'Name');
+  var iUT = hi(us,'Title'); var iUS = hi(us,'User Start Day'); if (iUS < 0) iUS = hi(us,'Start Date'); var iUR = hi(us,'Region');
+  var selRegion = gmf('ut-trend-region'), selRole = gmf('ut-trend-role');
+  var people = [];
+  us.data.forEach(function(r) {
+    var name = iUN >= 0 ? String(r[iUN]||'').trim() : ''; if (!name) return;
+    var title = iUT >= 0 ? String(r[iUT]||'').toLowerCase() : '';
+    var role  = (title.indexOf('consulting')>-1 || title.indexOf('training')>-1 || title.indexOf('delivery')>-1) ? 'Consultant' : 'Engagement Manager';
+    var region = iUR >= 0 ? String(r[iUR]||'').trim() : '';
+    if (selRegion.length && selRegion.indexOf(region) < 0) return;
+    if (selRole.length   && selRole.indexOf(role)     < 0) return;
+    var startStr = iUS >= 0 ? String(r[iUS]||'').trim() : '';
+    var startD = startStr ? new Date(startStr) : null;
+    var rampEnd = (startD && !isNaN(startD)) ? new Date(startD.getTime() + 90*86400000) : null;
+    if (rampEnd) rampEnd.setHours(0,0,0,0);
+    var hrsRows = hoursMap[name.toLowerCase()] || [];
+    var data = monthKeys.map(function(k) {
+      var mm = monthMap[k];
+      var ws = (rampEnd && rampEnd > mm.cs) ? rampEnd : mm.cs;
+      var work = (ws <= mm.ce) ? countWeekdays(ws, mm.ce) * 8 : 0;
+      var bill = 0;
+      hrsRows.forEach(function(hr) {
+        var ds = iDate >= 0 ? String(hr[iDate]||'').trim() : ''; if (!ds) return;
+        var d = new Date(ds); if (isNaN(d)) return; d.setHours(0,0,0,0);
+        if (d < mm.cs || d > mm.ce) return;
+        if (rampEnd && d < rampEnd) return;
+        if (psIsBillable(hr, iProj, iPT, iAdm)) bill += (iHrs >= 0 ? (parseFloat(hr[iHrs]) || 0) : 0);
       });
-      return { name: e.resource, data: data };
+      return { work: work, bill: bill };
     });
+    people.push({ name: name, data: data });
+  });
+  people.sort(function(a, b) { return a.name.localeCompare(b.name); });
 
-    // Populate the chart-only resource multi-select, preserving prior selection.
-    var resNames = people.map(function(p) { return p.name; });
-    var resPanel = document.getElementById('msp-ut-trend-res');
-    var resSeeded = resPanel && resPanel.querySelector('input[type=checkbox]');
-    var prevRes = resSeeded ? gmf('ut-trend-res') : [];
-    fillMsTrend('ut-trend-res', resNames);
-    setMsMulti('ut-trend-res', (prevRes || []).filter(function(n) { return resNames.indexOf(n) > -1; }));
+  // Populate the chart's resource filter (depends on region/role), preserve selection.
+  var resNames = people.map(function(p) { return p.name; });
+  var resPanel = document.getElementById('msp-ut-trend-res');
+  var resSeeded = resPanel && resPanel.querySelector('input[type=checkbox]');
+  var prevRes = resSeeded ? gmf('ut-trend-res') : [];
+  fillMsTrend('ut-trend-res', resNames);
+  setMsMulti('ut-trend-res', (prevRes || []).filter(function(n) { return resNames.indexOf(n) > -1; }));
 
-    // Store raw work/bill per person so drawUtTrend can recompute the aggregate
-    // for whatever subset of resources is selected in the chart's filter.
-    UT_TREND = { labels: labels, people: people };   // people: [{ name, data:[{work,bill}] }]
-    drawUtTrend();
-  })();
+  UT_TREND = { labels: labels, people: people };   // people: [{ name, data:[{work,bill}] }]
+  drawUtTrend();
 }
 
 // ── Utilization trend chart (line) ─────────────────────────────
