@@ -149,6 +149,12 @@ select:focus { outline: none; border-color: var(--red); }
 .ut-expand-btn:hover { background:var(--border); }
 .ut-expand-btn svg { transition:transform 0.2s; display:block; }
 .ut-expand-btn.open svg { transform:rotate(90deg); }
+.ut-trend-toggle { display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.ut-trend-btn { background:var(--bg-card2); color:var(--text-muted); border:none; padding:5px 12px; font-size:11px; cursor:pointer; transition:all .12s; }
+.ut-trend-btn + .ut-trend-btn { border-left:1px solid var(--border); }
+.ut-trend-btn:hover { color:var(--text); }
+.ut-trend-btn.active { background:var(--red); color:#fff; font-weight:600; }
+#ut-trend-canvas { max-height:none !important; }
 tr.ut-data-row:hover > td { background:var(--bg-card) !important; }
 tr.ut-detail-row > td { padding:0; border-bottom:1px solid var(--border); }
 .ut-detail-panel { padding:10px 16px 14px 36px; background:var(--bg-page); }
@@ -719,6 +725,21 @@ th { position: relative; }
               <thead id="ut-weekly-head"></thead>
               <tbody id="ut-weekly-body"></tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- Utilization trend by month -->
+        <div class="chart-card" style="margin-top:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <span style="font-size:12.5px;font-weight:600">Utilization Trend by Month</span>
+            <div class="ut-trend-toggle">
+              <button id="ut-trend-btn-aggregate" class="ut-trend-btn active" onclick="toggleUtTrend('aggregate')">Team</button>
+              <button id="ut-trend-btn-person" class="ut-trend-btn" onclick="toggleUtTrend('person')">By Person</button>
+            </div>
+          </div>
+          <div style="position:relative;height:340px">
+            <canvas id="ut-trend-canvas"></canvas>
+            <div id="ut-trend-empty" class="empty" style="display:none">No utilization data for the selected filters.</div>
           </div>
         </div>
       </div>
@@ -2826,6 +2847,16 @@ function renderUtilization() {
   var iHrsPT   = hi(s,'Project Type');
   var iHrsAdm  = hi(s,'Administration Type');
 
+  // Billable: (project not blank AND type ≠ internal) OR admin type is one of
+  // Program Management / General Product Issues / Customer Travel.
+  function utIsBillable(hr) {
+    var proj  = iHrsProj >= 0 ? String(hr[iHrsProj]||'').trim() : '';
+    var ptype = iHrsPT   >= 0 ? String(hr[iHrsPT]  ||'').trim().toLowerCase() : '';
+    var adm   = iHrsAdm  >= 0 ? String(hr[iHrsAdm] ||'').trim().toLowerCase() : '';
+    var isBillableAdm = adm === 'program management' || adm === 'general product issues' || adm === 'customer travel';
+    return (proj !== '' && ptype !== 'internal') || isBillableAdm;
+  }
+
   // ── Build per-person hours list, filtered to the period ─────
   var hoursMap = {};   // name.toLowerCase() → [rows in period]
   s.data.forEach(function(r) {
@@ -2890,15 +2921,11 @@ function renderUtilization() {
     var billableHrs = 0, ptoHrs = 0, totalHrs = 0, admBreakdown = {};
     hrsRows.forEach(function(hr) {
       var h     = iHrsHrs  >= 0 ? (parseFloat(hr[iHrsHrs])  || 0) : 0;
-      var proj  = iHrsProj >= 0 ? String(hr[iHrsProj]||'').trim() : '';
-      var ptype = iHrsPT   >= 0 ? String(hr[iHrsPT]  ||'').trim().toLowerCase() : '';
       var adm   = iHrsAdm  >= 0 ? String(hr[iHrsAdm] ||'').trim() : '';
       totalHrs += h;
-      // Billable: (project not blank AND type ≠ internal) OR admin = Program Management / General Product Issues / Customer Travel
       var admLower = adm.toLowerCase();
       var isBillableAdm = admLower === 'program management' || admLower === 'general product issues' || admLower === 'customer travel';
-      var isBillable = (proj !== '' && ptype !== 'internal') || isBillableAdm;
-      if (isBillable) {
+      if (utIsBillable(hr)) {
         billableHrs += h;
       }
       // Track non-billable admin types for the breakdown panel —
@@ -2921,6 +2948,7 @@ function renderUtilization() {
       rampStatus:  rampAtPeriod,
       manager:     iUM >= 0 ? String(r[iUM]||'').trim() : '',
       region:      iUR >= 0 ? String(r[iUR]||'').trim() : '',
+      rampEndDate: rampEndDate,        // ramp cutoff (null = none) — used by the trend chart
       billableHrs: billableHrs,
       totalHrs:    totalHrs,
       workingHrs:  effectiveWorkHrs,   // weekdays from max(periodStart, startDate+90) × 8
@@ -2999,6 +3027,7 @@ function renderUtilization() {
 
   if (rows.length === 0) {
     el.innerHTML = '<tr><td colspan="12" class="empty">No records match the selected filters.</td></tr>';
+    UT_TREND = null; drawUtTrend();
     return;
   }
 
@@ -3205,6 +3234,138 @@ function renderUtilization() {
       '</tr>';
     }).join('');
   })();
+
+  // ── Utilization trend by month (drives the line chart at the bottom) ──
+  // Respects the current filters (rows) and the selected period(s). Builds one
+  // calendar-month bucket per month overlapping a selected range; utilization =
+  // billable hours / expected working hours within that month.
+  (function() {
+    // Distinct months overlapping the selected ranges, each clipped to the range.
+    var monthMap = {};   // 'YYYY-M' → { y, m, cs, ce }
+    periods.forEach(function(p) {
+      var cur = new Date(p.start.getFullYear(), p.start.getMonth(), 1);
+      while (cur <= p.end) {
+        var y = cur.getFullYear(), mo = cur.getMonth();
+        var mStart = new Date(y, mo, 1); mStart.setHours(0,0,0,0);
+        var mEnd   = new Date(y, mo + 1, 0); mEnd.setHours(23,59,59,999);
+        var cs = mStart < p.start ? p.start : mStart;
+        var ce = mEnd   > p.end   ? p.end   : mEnd;
+        if (cs <= ce) {
+          var key = y + '-' + mo;
+          if (!monthMap[key]) monthMap[key] = { y: y, m: mo, cs: cs, ce: ce };
+          else { if (cs < monthMap[key].cs) monthMap[key].cs = cs; if (ce > monthMap[key].ce) monthMap[key].ce = ce; }
+        }
+        cur = new Date(y, mo + 1, 1);
+      }
+    });
+    var monthKeys = Object.keys(monthMap).sort(function(a, b) {
+      return new Date(monthMap[a].y, monthMap[a].m, 1) - new Date(monthMap[b].y, monthMap[b].m, 1);
+    });
+    var MON3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var labels = monthKeys.map(function(k) { return MON3[monthMap[k].m] + ' ' + monthMap[k].y; });
+
+    // Per-person billable + working hours per month.
+    var people = rows.map(function(e) {
+      var hrsRows = hoursMap[e.resource.toLowerCase()] || [];
+      var data = monthKeys.map(function(k) {
+        var mm = monthMap[k];
+        // Working hours: weekdays in the clipped month on/after the ramp cutoff × 8.
+        var ws = (e.rampEndDate && e.rampEndDate > mm.cs) ? e.rampEndDate : mm.cs;
+        var workHrs = (ws <= mm.ce) ? countWeekdays(ws, mm.ce) * 8 : 0;
+        // Billable hours logged inside the clipped month, on/after the ramp cutoff.
+        var billHrs = 0;
+        hrsRows.forEach(function(hr) {
+          var ds = iHrsDate >= 0 ? String(hr[iHrsDate]||'').trim() : '';
+          if (!ds) return;
+          var d = new Date(ds); if (isNaN(d)) return;
+          d.setHours(0,0,0,0);
+          if (d < mm.cs || d > mm.ce) return;
+          if (e.rampEndDate && d < e.rampEndDate) return;
+          if (utIsBillable(hr)) billHrs += (iHrsHrs >= 0 ? (parseFloat(hr[iHrsHrs]) || 0) : 0);
+        });
+        return { work: workHrs, bill: billHrs };
+      });
+      return { name: e.resource, data: data };
+    });
+
+    // Aggregate (team weighted) per month = Σ billable / Σ working across filtered resources.
+    var agg = monthKeys.map(function(_k, i) {
+      var b = 0, w = 0;
+      people.forEach(function(p) { b += p.data[i].bill; w += p.data[i].work; });
+      return w > 0 ? Math.round(b / w * 100) : null;
+    });
+    var peopleSeries = people.map(function(p) {
+      return { name: p.name, data: p.data.map(function(d) { return d.work > 0 ? Math.round(d.bill / d.work * 100) : null; }) };
+    });
+
+    UT_TREND = { labels: labels, agg: agg, people: peopleSeries };
+    drawUtTrend();
+  })();
+}
+
+// ── Utilization trend chart (line) ─────────────────────────────
+var UT_TREND      = null;          // { labels, agg:[], people:[{name,data}] }
+var UT_TREND_MODE = 'aggregate';   // 'aggregate' | 'person'
+var UT_TREND_COLORS = ['#FF4438','#80DBFF','#3ECF8E','#FFA726','#B18AFF','#FF80C0','#5AC8FA','#FFD600','#7EE787','#FF9E64','#9A8CFF','#4DD0E1'];
+
+function toggleUtTrend(mode) {
+  UT_TREND_MODE = mode;
+  ['aggregate','person'].forEach(function(mkey) {
+    var btn = document.getElementById('ut-trend-btn-' + mkey);
+    if (btn) btn.classList.toggle('active', mkey === mode);
+  });
+  drawUtTrend();
+}
+
+function drawUtTrend() {
+  var canvas = document.getElementById('ut-trend-canvas');
+  var empty  = document.getElementById('ut-trend-empty');
+  if (!canvas) return;
+  if (CHARTS.utTrend) { CHARTS.utTrend.destroy(); CHARTS.utTrend = null; }
+
+  if (!UT_TREND || !UT_TREND.labels.length) {
+    canvas.style.display = 'none';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  canvas.style.display = '';
+  if (empty) empty.style.display = 'none';
+
+  var cd = { color: '#8A8AAA', gridColor: '#252550' };
+  var datasets;
+  if (UT_TREND_MODE === 'person') {
+    datasets = UT_TREND.people.map(function(p, i) {
+      var c = UT_TREND_COLORS[i % UT_TREND_COLORS.length];
+      return {
+        label: p.name, data: p.data, borderColor: c, backgroundColor: c,
+        borderWidth: 1.5, pointRadius: 2, pointHoverRadius: 4, tension: 0.25, spanGaps: true
+      };
+    });
+  } else {
+    datasets = [{
+      label: 'Team billable utilization', data: UT_TREND.agg,
+      borderColor: '#FF4438', backgroundColor: 'rgba(255,68,56,0.12)',
+      borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 5, tension: 0.25, fill: true, spanGaps: true
+    }];
+  }
+
+  var manyLines = (UT_TREND_MODE === 'person' && datasets.length > 12);
+  CHARTS.utTrend = new Chart(canvas, {
+    type: 'line',
+    data: { labels: UT_TREND.labels, datasets: datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: !manyLines, position: 'bottom', labels: { color: cd.color, font: { size: 10 }, padding: 8, boxWidth: 12 } },
+        tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + (ctx.parsed.y === null ? 'n/a' : ctx.parsed.y + '%'); } } }
+      },
+      scales: {
+        x: { ticks: { color: cd.color, font: { size: 10 } }, grid: { color: cd.gridColor } },
+        y: { ticks: { color: cd.color, callback: function(v) { return v + '%'; } }, grid: { color: cd.gridColor }, beginAtZero: true, suggestedMax: 100 }
+      }
+    }
+  });
 }
 
 // ════════════════════════════════════════════════════════════
