@@ -732,9 +732,12 @@ th { position: relative; }
         <div class="chart-card" style="margin-top:20px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
             <span style="font-size:12.5px;font-weight:600">Utilization Trend by Month</span>
-            <div class="ut-trend-toggle">
-              <button id="ut-trend-btn-aggregate" class="ut-trend-btn active" onclick="toggleUtTrend('aggregate')">Team</button>
-              <button id="ut-trend-btn-person" class="ut-trend-btn" onclick="toggleUtTrend('person')">By Person</button>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-trend-res',event)"><span class="ms-label">All resources</span></button><div class="ms-panel" id="msp-ut-trend-res"></div></div>
+              <div class="ut-trend-toggle">
+                <button id="ut-trend-btn-aggregate" class="ut-trend-btn active" onclick="toggleUtTrend('aggregate')">Team</button>
+                <button id="ut-trend-btn-person" class="ut-trend-btn" onclick="toggleUtTrend('person')">By Person</button>
+              </div>
             </div>
           </div>
           <div style="position:relative;height:340px">
@@ -1519,6 +1522,33 @@ function onMsItemAR(key, cb) {
   if (!anyChecked && allCb) allCb.checked = true;
   updateMsLabel(key);
   renderAttachRates();
+}
+
+// Trend chart resource filter — chart-only, so it re-draws without recomputing the tab.
+function onMsAllTrend(key, cb) {
+  if (cb.checked) {
+    var panel = document.getElementById('msp-' + key);
+    panel.querySelectorAll('input[type=checkbox]:not([value="__all__"])').forEach(function(c) { c.checked = false; });
+  }
+  updateMsLabel(key);
+  drawUtTrend();
+}
+function onMsItemTrend(key, cb) {
+  var panel = document.getElementById('msp-' + key);
+  var allCb = panel.querySelector('input[value="__all__"]');
+  if (cb.checked && allCb) allCb.checked = false;
+  var anyChecked = Array.from(panel.querySelectorAll('input[type=checkbox]:not([value="__all__"])')).some(function(c) { return c.checked; });
+  if (!anyChecked && allCb) allCb.checked = true;
+  updateMsLabel(key);
+  drawUtTrend();
+}
+function fillMsTrend(key, vals) {
+  var panel = document.getElementById('msp-' + key);
+  if (!panel) return;
+  panel.innerHTML = '<label class="ms-item"><input type="checkbox" value="__all__" checked onchange="onMsAllTrend(\'' + key + '\',this)"> All</label>' +
+    vals.map(function (v) {
+      return '<label class="ms-item"><input type="checkbox" value="' + esc(v) + '" onchange="onMsItemTrend(\'' + key + '\',this)"> ' + esc(v) + '</label>';
+    }).join('');
 }
 
 // Every option value in a multi-select panel (ignores the "All" checkbox).
@@ -3300,23 +3330,23 @@ function renderUtilization() {
       return { name: e.resource, data: data };
     });
 
-    // Aggregate (team weighted) per month = Σ billable / Σ working across filtered resources.
-    var agg = monthKeys.map(function(_k, i) {
-      var b = 0, w = 0;
-      people.forEach(function(p) { b += p.data[i].bill; w += p.data[i].work; });
-      return w > 0 ? Math.round(b / w * 100) : null;
-    });
-    var peopleSeries = people.map(function(p) {
-      return { name: p.name, data: p.data.map(function(d) { return d.work > 0 ? Math.round(d.bill / d.work * 100) : null; }) };
-    });
+    // Populate the chart-only resource multi-select, preserving prior selection.
+    var resNames = people.map(function(p) { return p.name; });
+    var resPanel = document.getElementById('msp-ut-trend-res');
+    var resSeeded = resPanel && resPanel.querySelector('input[type=checkbox]');
+    var prevRes = resSeeded ? gmf('ut-trend-res') : [];
+    fillMsTrend('ut-trend-res', resNames);
+    setMsMulti('ut-trend-res', (prevRes || []).filter(function(n) { return resNames.indexOf(n) > -1; }));
 
-    UT_TREND = { labels: labels, agg: agg, people: peopleSeries };
+    // Store raw work/bill per person so drawUtTrend can recompute the aggregate
+    // for whatever subset of resources is selected in the chart's filter.
+    UT_TREND = { labels: labels, people: people };   // people: [{ name, data:[{work,bill}] }]
     drawUtTrend();
   })();
 }
 
 // ── Utilization trend chart (line) ─────────────────────────────
-var UT_TREND      = null;          // { labels, agg:[], people:[{name,data}] }
+var UT_TREND      = null;          // { labels, people:[{name, data:[{work,bill}]}] }
 var UT_TREND_MODE = 'aggregate';   // 'aggregate' | 'person'
 var UT_TREND_COLORS = ['#FF4438','#80DBFF','#3ECF8E','#FFA726','#B18AFF','#FF80C0','#5AC8FA','#FFD600','#7EE787','#FF9E64','#9A8CFF','#4DD0E1'];
 
@@ -3335,9 +3365,19 @@ function drawUtTrend() {
   if (!canvas) return;
   if (CHARTS.utTrend) { CHARTS.utTrend.destroy(); CHARTS.utTrend = null; }
 
-  if (!UT_TREND || !UT_TREND.labels.length) {
+  // Apply the chart-only resource filter ([] = all resources).
+  var sel = gmf('ut-trend-res');
+  var ppl = (UT_TREND && UT_TREND.people) ? UT_TREND.people : [];
+  if (sel.length) ppl = ppl.filter(function(p) { return sel.indexOf(p.name) > -1; });
+
+  if (!UT_TREND || !UT_TREND.labels.length || !ppl.length) {
     canvas.style.display = 'none';
-    if (empty) empty.style.display = 'block';
+    if (empty) {
+      empty.textContent = (UT_TREND && UT_TREND.labels.length && !ppl.length)
+        ? 'No resources selected.'
+        : 'No utilization data for the selected filters.';
+      empty.style.display = 'block';
+    }
     return;
   }
   canvas.style.display = '';
@@ -3346,16 +3386,22 @@ function drawUtTrend() {
   var cd = { color: '#8A8AAA', gridColor: '#252550' };
   var datasets;
   if (UT_TREND_MODE === 'person') {
-    datasets = UT_TREND.people.map(function(p, i) {
+    datasets = ppl.map(function(p, i) {
       var c = UT_TREND_COLORS[i % UT_TREND_COLORS.length];
+      var data = p.data.map(function(d) { return d.work > 0 ? Math.round(d.bill / d.work * 100) : null; });
       return {
-        label: p.name, data: p.data, borderColor: c, backgroundColor: c,
+        label: p.name, data: data, borderColor: c, backgroundColor: c,
         borderWidth: 1.5, pointRadius: 2, pointHoverRadius: 4, tension: 0.25, spanGaps: true
       };
     });
   } else {
+    var agg = UT_TREND.labels.map(function(_l, i) {
+      var b = 0, w = 0;
+      ppl.forEach(function(p) { b += p.data[i].bill; w += p.data[i].work; });
+      return w > 0 ? Math.round(b / w * 100) : null;
+    });
     datasets = [{
-      label: 'Team billable utilization', data: UT_TREND.agg,
+      label: 'Team billable utilization', data: agg,
       borderColor: '#FF4438', backgroundColor: 'rgba(255,68,56,0.12)',
       borderWidth: 2.5, pointRadius: 3, pointHoverRadius: 5, tension: 0.25, fill: true, spanGaps: true
     }];
