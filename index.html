@@ -1836,10 +1836,6 @@ function renderActiveProjects() {
     return true;
   });
 
-  function isNewLogo(r) {
-    return String(r[iOppRecType] || '').toLowerCase() === '1. new customer';
-  }
-
   // KPI counts — use computeStage for consistency with filter
   var total            = rows.length;
   var awaitHandoff     = rows.filter(function (r) {
@@ -1855,10 +1851,10 @@ function renderActiveProjects() {
     return computeStage(r, iOnHold, iHandoff, iKickoff, iEntered, iActGL, iOppRecType) === 'On Hold';
   }).length;
   var nlAwaitGL        = rows.filter(function (r) {
-    return isNewLogo(r) && String(r[iActGL] || '').trim() === '';
+    return computeStage(r, iOnHold, iHandoff, iKickoff, iEntered, iActGL, iOppRecType) === 'New Logo Awaiting Go Live';
   }).length;
   var nlLiveAwaitClose = rows.filter(function (r) {
-    return isNewLogo(r) && String(r[iActGL] || '').trim() !== '';
+    return computeStage(r, iOnHold, iHandoff, iKickoff, iEntered, iActGL, iOppRecType) === 'New Logo Live / Awaiting Closure';
   }).length;
   var totalHrsRem      = rows.reduce(function (acc, r) {
     return acc + (parseFloat(r[iHrsRem]) || 0);
