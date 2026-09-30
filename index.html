@@ -733,10 +733,16 @@ th { position: relative; }
         <!-- Utilization trend by month -->
         <div class="chart-card" style="margin-top:20px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-            <span style="font-size:12.5px;font-weight:600">Utilization Trend by Month</span>
-            <div class="ut-trend-toggle">
-              <button id="ut-trend-btn-aggregate" class="ut-trend-btn active" onclick="toggleUtTrend('aggregate')">Team</button>
-              <button id="ut-trend-btn-person" class="ut-trend-btn" onclick="toggleUtTrend('person')">By Person</button>
+            <span id="ut-trend-title" style="font-size:12.5px;font-weight:600">Utilization Trend by Month</span>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div class="ut-trend-toggle">
+                <button id="ut-trend-grain-month" class="ut-trend-btn active" onclick="toggleUtTrendGrain('month')">Month</button>
+                <button id="ut-trend-grain-week" class="ut-trend-btn" onclick="toggleUtTrendGrain('week')">Week</button>
+              </div>
+              <div class="ut-trend-toggle">
+                <button id="ut-trend-btn-aggregate" class="ut-trend-btn active" onclick="toggleUtTrend('aggregate')">Team</button>
+                <button id="ut-trend-btn-person" class="ut-trend-btn" onclick="toggleUtTrend('person')">By Person</button>
+              </div>
             </div>
           </div>
           <!-- Chart-only filters (independent of the tab filters above) -->
@@ -747,6 +753,8 @@ th { position: relative; }
               <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-trend-role',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-trend-role"></div></div></div>
             <div class="utf-group"><label>Fiscal Quarter</label>
               <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-trend-quarter',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-trend-quarter"></div></div></div>
+            <div class="utf-group"><label>Week</label>
+              <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-trend-week',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-trend-week" style="min-width:230px"></div></div></div>
             <div class="utf-group"><label>Resource</label>
               <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-trend-res',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-trend-res"></div></div></div>
           </div>
@@ -3337,41 +3345,122 @@ function renderUtTrend() {
   var today0 = new Date(); today0.setHours(0,0,0,0);
   var curQ = getFQLabel(today0);
 
-  // Reporting period(s) from the chart's fiscal-quarter filter ([] = All quarters).
+  // Quarter period(s) from the chart's fiscal-quarter filter ([] = All quarters).
   var selQ = gmf('ut-trend-quarter');
   var quartersToUse = selQ.length ? selQ : msAllValues('ut-trend-quarter');
-  var periods = [];
+  var qPeriods = [];
   quartersToUse.forEach(function(q) {
     var r = getFQRange(q);
     var st = new Date(r.start); st.setHours(0,0,0,0);
     var en = (q === curQ) ? priorWeekSaturday(today0) : new Date(r.end);
-    if (en >= st) periods.push({ start: st, end: en, label: q });
+    if (en >= st) qPeriods.push({ start: st, end: en, label: q });
   });
-  if (!periods.length) { var r0 = getFQRange(curQ); periods.push({ start: new Date(r0.start), end: priorWeekSaturday(today0), label: curQ }); }
-  periods.sort(function(a, b) { return a.start - b.start; });
-  function inAnyPeriod(d) { for (var i = 0; i < periods.length; i++) { if (d >= periods[i].start && d <= periods[i].end) return true; } return false; }
+  if (!qPeriods.length) { var r0 = getFQRange(curQ); qPeriods.push({ start: new Date(r0.start), end: priorWeekSaturday(today0), label: curQ }); }
+  qPeriods.sort(function(a, b) { return a.start - b.start; });
 
-  // Month buckets (clipped to periods).
-  var monthMap = {};
-  periods.forEach(function(p) {
-    var cur = new Date(p.start.getFullYear(), p.start.getMonth(), 1);
-    while (cur <= p.end) {
-      var y = cur.getFullYear(), mo = cur.getMonth();
-      var mStart = new Date(y, mo, 1); mStart.setHours(0,0,0,0);
-      var mEnd   = new Date(y, mo + 1, 0); mEnd.setHours(23,59,59,999);
-      var cs = mStart < p.start ? p.start : mStart;
-      var ce = mEnd   > p.end   ? p.end   : mEnd;
-      if (cs <= ce) {
-        var key = y + '-' + mo;
-        if (!monthMap[key]) monthMap[key] = { y: y, m: mo, cs: cs, ce: ce };
-        else { if (cs < monthMap[key].cs) monthMap[key].cs = cs; if (ce > monthMap[key].ce) monthMap[key].ce = ce; }
+  var MON3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function sunOf(d) { var s = new Date(d); s.setHours(0,0,0,0); s.setDate(s.getDate() - s.getDay()); return s; }
+  function weekLabel(ws) {   // e.g. "Sep 21 – Sep 27, 2026" (Sun–Sat)
+    var we = new Date(ws); we.setDate(we.getDate() + 6);
+    var sameYear = ws.getFullYear() === we.getFullYear();
+    return MON3[ws.getMonth()] + ' ' + ws.getDate() + (sameYear ? '' : ', ' + ws.getFullYear()) +
+           ' – ' + MON3[we.getMonth()] + ' ' + we.getDate() + ', ' + we.getFullYear();
+  }
+
+  // Week options = Sun–Sat weeks with at least one weekday inside the quarter
+  // period(s). Current quarter is already capped at the last completed week.
+  var weekByLabel = {}, weekOpts = [];
+  qPeriods.forEach(function(p) {
+    var ws = sunOf(p.start);
+    while (ws <= p.end) {
+      var we = new Date(ws); we.setDate(we.getDate() + 6); we.setHours(23,59,59,999);
+      var os = ws < p.start ? p.start : ws, oe = we > p.end ? p.end : we;
+      var lbl = weekLabel(ws);
+      if (!weekByLabel[lbl] && os <= oe && countWeekdays(os, oe) > 0) {
+        weekByLabel[lbl] = { start: new Date(ws), end: we };
+        weekOpts.push(lbl);
       }
-      cur = new Date(y, mo + 1, 1);
+      ws = new Date(ws); ws.setDate(ws.getDate() + 7);
     }
   });
-  var monthKeys = Object.keys(monthMap).sort(function(a, b) { return new Date(monthMap[a].y, monthMap[a].m, 1) - new Date(monthMap[b].y, monthMap[b].m, 1); });
-  var MON3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var labels = monthKeys.map(function(k) { return MON3[monthMap[k].m] + ' ' + monthMap[k].y; });
+  weekOpts.sort(function(a, b) { return weekByLabel[b].start - weekByLabel[a].start; });   // most recent first
+
+  // Populate the chart's week filter (depends on quarter), preserve selection.
+  var wkPanel = document.getElementById('msp-ut-trend-week');
+  var wkSeeded = wkPanel && wkPanel.querySelector('input[type=checkbox]');
+  var prevWk = wkSeeded ? gmf('ut-trend-week') : [];
+  fillMsTrendR('ut-trend-week', weekOpts);
+  setMsMulti('ut-trend-week', (prevWk || []).filter(function(w) { return !!weekByLabel[w]; }));
+  var selW = gmf('ut-trend-week');
+
+  // Effective period(s): selected weeks (clipped to the quarter periods), or the
+  // quarter periods themselves when the week filter is "All".
+  var periods = qPeriods;
+  if (selW.length) {
+    periods = [];
+    selW.forEach(function(lbl) {
+      var wk = weekByLabel[lbl];
+      qPeriods.forEach(function(p) {
+        var s = wk.start > p.start ? wk.start : p.start;
+        var e = wk.end   < p.end   ? wk.end   : p.end;
+        if (s <= e) periods.push({ start: s, end: e, label: lbl });
+      });
+    });
+    periods.sort(function(a, b) { return a.start - b.start; });
+  }
+  function inAnyPeriod(d) { for (var i = 0; i < periods.length; i++) { if (d >= periods[i].start && d <= periods[i].end) return true; } return false; }
+
+  // Buckets for the chosen grain (month or Sun–Sat week), clipped to the periods.
+  // A bucket keeps a LIST of sub-ranges (not one merged span) so that picking
+  // non-adjacent weeks never counts the unselected days in between.
+  var bMap = {}, buckets = [];
+  function addBucket(key, label, full, cs, ce) {
+    var b = bMap[key];
+    if (!b) { b = bMap[key] = { label: label, full: full, start: cs, ranges: [] }; buckets.push(b); }
+    if (cs < b.start) b.start = cs;
+    b.ranges.push({ cs: cs, ce: ce });
+  }
+  function bucketWeekdays(b, from) {   // weekdays in the bucket's ranges, on/after `from`
+    var n = 0;
+    b.ranges.forEach(function(rg) {
+      var s = (from && from > rg.cs) ? from : rg.cs;
+      if (s <= rg.ce) n += countWeekdays(s, rg.ce);
+    });
+    return n;
+  }
+  function inBucket(b, d) {
+    for (var i = 0; i < b.ranges.length; i++) { if (d >= b.ranges[i].cs && d <= b.ranges[i].ce) return true; }
+    return false;
+  }
+  periods.forEach(function(p) {
+    if (UT_TREND_GRAIN === 'week') {
+      var ws = sunOf(p.start);
+      while (ws <= p.end) {
+        var we = new Date(ws); we.setDate(we.getDate() + 6); we.setHours(23,59,59,999);
+        var cs = ws < p.start ? p.start : ws, ce = we > p.end ? p.end : we;
+        if (cs <= ce) addBucket('w' + ws.getTime(),
+          MON3[ws.getMonth()] + ' ' + ws.getDate() + " '" + String(ws.getFullYear()).slice(2),
+          'Week of ' + weekLabel(ws), cs, ce);
+        ws = new Date(ws); ws.setDate(ws.getDate() + 7);
+      }
+    } else {
+      var cur = new Date(p.start.getFullYear(), p.start.getMonth(), 1);
+      while (cur <= p.end) {
+        var y = cur.getFullYear(), mo = cur.getMonth();
+        var mStart = new Date(y, mo, 1); mStart.setHours(0,0,0,0);
+        var mEnd   = new Date(y, mo + 1, 0); mEnd.setHours(23,59,59,999);
+        var mcs = mStart < p.start ? p.start : mStart;
+        var mce = mEnd   > p.end   ? p.end   : mEnd;
+        if (mcs <= mce) addBucket('m' + y + '-' + mo, MON3[mo] + ' ' + y, MON3[mo] + ' ' + y, mcs, mce);
+        cur = new Date(y, mo + 1, 1);
+      }
+    }
+  });
+  // Drop buckets with no expected working days (e.g. weekend-only clips), sort oldest → newest.
+  buckets = buckets.filter(function(b) { return bucketWeekdays(b, null) > 0; });
+  buckets.sort(function(a, b) { return a.start - b.start; });
+  var labels     = buckets.map(function(b) { return b.label; });
+  var fullLabels = buckets.map(function(b) { return b.full; });
 
   // Hours data → per-person rows within the chart's periods.
   var iName = hi(hs,'Work: Owner Name'); if (iName < 0) iName = hi(hs,'Work Owner Name');
@@ -3403,15 +3492,14 @@ function renderUtTrend() {
     var rampEnd = (startD && !isNaN(startD)) ? new Date(startD.getTime() + 90*86400000) : null;
     if (rampEnd) rampEnd.setHours(0,0,0,0);
     var hrsRows = hoursMap[name.toLowerCase()] || [];
-    var data = monthKeys.map(function(k) {
-      var mm = monthMap[k];
-      var ws = (rampEnd && rampEnd > mm.cs) ? rampEnd : mm.cs;
-      var work = (ws <= mm.ce) ? countWeekdays(ws, mm.ce) * 8 : 0;
+    var data = buckets.map(function(bk) {
+      // Working hours: weekdays in the bucket's ranges on/after the ramp cutoff × 8.
+      var work = bucketWeekdays(bk, rampEnd) * 8;
       var bill = 0;
       hrsRows.forEach(function(hr) {
         var ds = iDate >= 0 ? String(hr[iDate]||'').trim() : ''; if (!ds) return;
         var d = new Date(ds); if (isNaN(d)) return; d.setHours(0,0,0,0);
-        if (d < mm.cs || d > mm.ce) return;
+        if (!inBucket(bk, d)) return;
         if (rampEnd && d < rampEnd) return;
         if (psIsBillable(hr, iProj, iPT, iAdm)) bill += (iHrs >= 0 ? (parseFloat(hr[iHrs]) || 0) : 0);
       });
@@ -3429,13 +3517,25 @@ function renderUtTrend() {
   fillMsTrend('ut-trend-res', resNames);
   setMsMulti('ut-trend-res', (prevRes || []).filter(function(n) { return resNames.indexOf(n) > -1; }));
 
-  UT_TREND = { labels: labels, people: people };   // people: [{ name, data:[{work,bill}] }]
+  UT_TREND = { labels: labels, fullLabels: fullLabels, people: people };   // people: [{ name, data:[{work,bill}] }]
+  var tEl = document.getElementById('ut-trend-title');
+  if (tEl) tEl.textContent = 'Utilization Trend by ' + (UT_TREND_GRAIN === 'week' ? 'Week' : 'Month');
   drawUtTrend();
 }
 
 // ── Utilization trend chart (line) ─────────────────────────────
-var UT_TREND      = null;          // { labels, people:[{name, data:[{work,bill}]}] }
+var UT_TREND      = null;          // { labels, fullLabels, people:[{name, data:[{work,bill}]}] }
 var UT_TREND_MODE = 'aggregate';   // 'aggregate' | 'person'
+var UT_TREND_GRAIN = 'month';      // 'month' | 'week'
+
+function toggleUtTrendGrain(grain) {
+  UT_TREND_GRAIN = grain;
+  ['month','week'].forEach(function(k) {
+    var btn = document.getElementById('ut-trend-grain-' + k);
+    if (btn) btn.classList.toggle('active', k === grain);
+  });
+  renderUtTrend();   // buckets change → recompute
+}
 var UT_TREND_COLORS = ['#FF4438','#80DBFF','#3ECF8E','#FFA726','#B18AFF','#FF80C0','#5AC8FA','#FFD600','#7EE787','#FF9E64','#9A8CFF','#4DD0E1'];
 
 function toggleUtTrend(mode) {
@@ -3504,10 +3604,17 @@ function drawUtTrend() {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: !manyLines, position: 'bottom', labels: { color: cd.color, font: { size: 10 }, padding: 8, boxWidth: 12 } },
-        tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + (ctx.parsed.y === null ? 'n/a' : ctx.parsed.y + '%'); } } }
+        tooltip: { callbacks: {
+          title: function(items) {
+            if (!items.length) return '';
+            var fl = UT_TREND && UT_TREND.fullLabels;
+            return fl ? fl[items[0].dataIndex] : items[0].label;
+          },
+          label: function(ctx) { return ctx.dataset.label + ': ' + (ctx.parsed.y === null ? 'n/a' : ctx.parsed.y + '%'); }
+        } }
       },
       scales: {
-        x: { ticks: { color: cd.color, font: { size: 10 } }, grid: { color: cd.gridColor } },
+        x: { ticks: { color: cd.color, font: { size: 10 }, autoSkip: true, maxTicksLimit: 20 }, grid: { color: cd.gridColor } },
         y: { ticks: { color: cd.color, callback: function(v) { return v + '%'; } }, grid: { color: cd.gridColor }, beginAtZero: true, suggestedMax: 100 }
       }
     }
