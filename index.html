@@ -632,6 +632,8 @@ th { position: relative; }
             <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-quarter',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-quarter"></div></div></div>
           <div class="filter-group"><label>Month</label>
             <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-month',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-month"></div></div></div>
+          <div class="filter-group"><label>Week</label>
+            <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('ut-week',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-ut-week" style="min-width:230px"></div></div></div>
           <button class="clear-btn" onclick="clearF('ut')" style="align-self:flex-end">✕ Clear</button>
         </div>
 
@@ -1723,8 +1725,9 @@ function clearF(prefix) {
   }
   if (prefix === 'ut') {
     // region/manager/role/ramp are <select>s already reset to All above.
-    // Reset the multi-selects: month → All, quarter → current quarter (default).
+    // Reset the multi-selects: month/week → All, quarter → current quarter (default).
     clearMs('ut-month');
+    clearMs('ut-week');
     var _curQ = getFQLabel(new Date());
     var _qp = document.getElementById('msp-ut-quarter');
     if (_qp && _qp.querySelector('input[value="' + _curQ + '"]')) setMsMulti('ut-quarter', [_curQ]);
@@ -2883,12 +2886,29 @@ function renderUtilization() {
   }
   periods.sort(function(a, b) { return a.start - b.start; });
 
-  var allQuarters = (selM.length === 0 && selQ.length === 0);   // "All" quarters chosen
-  var periodLabel = allQuarters ? 'All quarters' : periods.map(function(p) { return p.label; }).join(', ');
+  // Week filter (most specific level: Quarter → Month → Week). Options are the
+  // Sun–Sat weeks inside the quarter/month selection, newest first; picking
+  // weeks narrows the table, KPIs and Missing Timecards to those weeks.
+  var wkInfo = utBuildWeeks(periods);
+  var wkPanel = document.getElementById('msp-ut-week');
+  var wkSeeded = wkPanel && wkPanel.querySelector('input[type=checkbox]');
+  var prevWk = wkSeeded ? gmf('ut-week') : [];
+  fillMsUT('ut-week', wkInfo.opts);
+  setMsMulti('ut-week', (prevWk || []).filter(function(w) { return !!wkInfo.byLabel[w]; }));
+  var selW = gmf('ut-week');
+  if (selW.length) {
+    var wkPeriods = utClipToWeeks(periods, selW, wkInfo.byLabel);
+    if (wkPeriods.length) periods = wkPeriods;
+  }
+
+  var allQuarters = (selW.length === 0 && selM.length === 0 && selQ.length === 0);   // "All" quarters chosen
+  var periodLabel = selW.length ? (selW.length === 1 ? selW[0] : selW.length + ' weeks')
+                  : allQuarters ? 'All quarters'
+                  : periods.map(function(p) { return p.label; }).join(', ');
   var periodStart = periods[0].start;                       // overall span start (for display)
   var periodEnd   = periods[periods.length - 1].end;        // overall span end   (for display)
   // True only when the selection is exactly the current quarter (drives sheet push).
-  var isDefaultCurrentQ = (selM.length === 0 && selQ.length === 1 && selQ[0] === curQLabel);
+  var isDefaultCurrentQ = (selW.length === 0 && selM.length === 0 && selQ.length === 1 && selQ[0] === curQLabel);
 
   // Is a date inside any selected range?
   function inAnyPeriod(d) {
@@ -3313,6 +3333,50 @@ function psIsBillable(hr, iProj, iPT, iAdm) {
   return (proj !== '' && ptype !== 'internal') || isBillableAdm;
 }
 
+// ── Week helpers (shared by the Utilization tab filters and its trend chart) ──
+// Weeks are Sunday–Saturday, matching the Missing Timecards table.
+var UT_MON3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function utSunOf(d) { var s = new Date(d); s.setHours(0,0,0,0); s.setDate(s.getDate() - s.getDay()); return s; }
+function utWeekLabel(ws) {   // e.g. "Sep 21 – Sep 27, 2026"
+  var we = new Date(ws); we.setDate(we.getDate() + 6);
+  var sameYear = ws.getFullYear() === we.getFullYear();
+  return UT_MON3[ws.getMonth()] + ' ' + ws.getDate() + (sameYear ? '' : ', ' + ws.getFullYear()) +
+         ' – ' + UT_MON3[we.getMonth()] + ' ' + we.getDate() + ', ' + we.getFullYear();
+}
+// Weeks with at least one weekday inside `periods` → { byLabel, opts } (opts newest first).
+function utBuildWeeks(periods) {
+  var byLabel = {}, opts = [];
+  periods.forEach(function(p) {
+    var ws = utSunOf(p.start);
+    while (ws <= p.end) {
+      var we = new Date(ws); we.setDate(we.getDate() + 6); we.setHours(23,59,59,999);
+      var os = ws < p.start ? p.start : ws, oe = we > p.end ? p.end : we;
+      var lbl = utWeekLabel(ws);
+      if (!byLabel[lbl] && os <= oe && countWeekdays(os, oe) > 0) {
+        byLabel[lbl] = { start: new Date(ws), end: we };
+        opts.push(lbl);
+      }
+      ws = new Date(ws); ws.setDate(ws.getDate() + 7);
+    }
+  });
+  opts.sort(function(a, b) { return byLabel[b].start - byLabel[a].start; });
+  return { byLabel: byLabel, opts: opts };
+}
+// Clip `periods` to the selected week labels → new period list (sorted).
+function utClipToWeeks(periods, selLabels, byLabel) {
+  var out = [];
+  selLabels.forEach(function(lbl) {
+    var wk = byLabel[lbl]; if (!wk) return;
+    periods.forEach(function(p) {
+      var s = wk.start > p.start ? wk.start : p.start;
+      var e = wk.end   < p.end   ? wk.end   : p.end;
+      if (s <= e) out.push({ start: s, end: e, label: lbl });
+    });
+  });
+  out.sort(function(a, b) { return a.start - b.start; });
+  return out;
+}
+
 // ── Utilization trend chart — computes its OWN view from the full data using a
 // dedicated filter set (region / role / fiscal quarter / resource), independent
 // of the tab's main filters. ─────────────────────────────────────────────────
@@ -3358,56 +3422,23 @@ function renderUtTrend() {
   if (!qPeriods.length) { var r0 = getFQRange(curQ); qPeriods.push({ start: new Date(r0.start), end: priorWeekSaturday(today0), label: curQ }); }
   qPeriods.sort(function(a, b) { return a.start - b.start; });
 
-  var MON3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  function sunOf(d) { var s = new Date(d); s.setHours(0,0,0,0); s.setDate(s.getDate() - s.getDay()); return s; }
-  function weekLabel(ws) {   // e.g. "Sep 21 – Sep 27, 2026" (Sun–Sat)
-    var we = new Date(ws); we.setDate(we.getDate() + 6);
-    var sameYear = ws.getFullYear() === we.getFullYear();
-    return MON3[ws.getMonth()] + ' ' + ws.getDate() + (sameYear ? '' : ', ' + ws.getFullYear()) +
-           ' – ' + MON3[we.getMonth()] + ' ' + we.getDate() + ', ' + we.getFullYear();
-  }
+  var MON3 = UT_MON3, sunOf = utSunOf, weekLabel = utWeekLabel;
 
-  // Week options = Sun–Sat weeks with at least one weekday inside the quarter
-  // period(s). Current quarter is already capped at the last completed week.
-  var weekByLabel = {}, weekOpts = [];
-  qPeriods.forEach(function(p) {
-    var ws = sunOf(p.start);
-    while (ws <= p.end) {
-      var we = new Date(ws); we.setDate(we.getDate() + 6); we.setHours(23,59,59,999);
-      var os = ws < p.start ? p.start : ws, oe = we > p.end ? p.end : we;
-      var lbl = weekLabel(ws);
-      if (!weekByLabel[lbl] && os <= oe && countWeekdays(os, oe) > 0) {
-        weekByLabel[lbl] = { start: new Date(ws), end: we };
-        weekOpts.push(lbl);
-      }
-      ws = new Date(ws); ws.setDate(ws.getDate() + 7);
-    }
-  });
-  weekOpts.sort(function(a, b) { return weekByLabel[b].start - weekByLabel[a].start; });   // most recent first
+  // Week options = Sun–Sat weeks inside the quarter period(s), newest first.
+  // Current quarter is already capped at the last completed week.
+  var wkInfo = utBuildWeeks(qPeriods);
 
   // Populate the chart's week filter (depends on quarter), preserve selection.
   var wkPanel = document.getElementById('msp-ut-trend-week');
   var wkSeeded = wkPanel && wkPanel.querySelector('input[type=checkbox]');
   var prevWk = wkSeeded ? gmf('ut-trend-week') : [];
-  fillMsTrendR('ut-trend-week', weekOpts);
-  setMsMulti('ut-trend-week', (prevWk || []).filter(function(w) { return !!weekByLabel[w]; }));
+  fillMsTrendR('ut-trend-week', wkInfo.opts);
+  setMsMulti('ut-trend-week', (prevWk || []).filter(function(w) { return !!wkInfo.byLabel[w]; }));
   var selW = gmf('ut-trend-week');
 
-  // Effective period(s): selected weeks (clipped to the quarter periods), or the
+  // Effective period(s): selected weeks clipped to the quarter periods, or the
   // quarter periods themselves when the week filter is "All".
-  var periods = qPeriods;
-  if (selW.length) {
-    periods = [];
-    selW.forEach(function(lbl) {
-      var wk = weekByLabel[lbl];
-      qPeriods.forEach(function(p) {
-        var s = wk.start > p.start ? wk.start : p.start;
-        var e = wk.end   < p.end   ? wk.end   : p.end;
-        if (s <= e) periods.push({ start: s, end: e, label: lbl });
-      });
-    });
-    periods.sort(function(a, b) { return a.start - b.start; });
-  }
+  var periods = selW.length ? utClipToWeeks(qPeriods, selW, wkInfo.byLabel) : qPeriods;
   function inAnyPeriod(d) { for (var i = 0; i < periods.length; i++) { if (d >= periods[i].start && d <= periods[i].end) return true; } return false; }
 
   // Buckets for the chosen grain (month or Sun–Sat week), clipped to the periods.
