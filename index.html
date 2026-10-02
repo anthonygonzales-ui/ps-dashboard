@@ -3050,9 +3050,35 @@ function renderUtilization() {
   var fRole    = gf('ut-role');
   var fRamp    = gf('ut-ramp');
 
+  // Manager filter = the selected manager's WHOLE reporting hierarchy: direct
+  // reports, their reports, and so on (built from PS User Records Manager Name).
+  var mgrScope = null;   // lowercased names in scope, or null = no manager filter
+  if (fManager !== 'All') {
+    var reportsOf = {};  // manager (lowercase) → [report full names]
+    us.data.forEach(function(r) {
+      var n  = iUN >= 0 ? String(r[iUN]||'').trim() : '';
+      var mg = iUM >= 0 ? String(r[iUM]||'').trim() : '';
+      if (!n || !mg) return;
+      var mk = mg.toLowerCase();
+      (reportsOf[mk] = reportsOf[mk] || []).push(n);
+    });
+    mgrScope = {};
+    var stack = [fManager.toLowerCase()], seenMgr = {};
+    while (stack.length) {
+      var m = stack.pop();
+      if (seenMgr[m]) continue;        // guards against cycles in the data
+      seenMgr[m] = 1;
+      (reportsOf[m] || []).forEach(function(n) {
+        var nk = n.toLowerCase();
+        mgrScope[nk] = 1;
+        stack.push(nk);
+      });
+    }
+  }
+
   var rows = enriched.filter(function(e) {
     if (fRegion  !== 'All' && e.region    !== fRegion)  return false;
-    if (fManager !== 'All' && e.manager   !== fManager) return false;
+    if (mgrScope && !mgrScope[e.resource.toLowerCase()]) return false;
     if (fRole    !== 'All' && e.role      !== fRole)    return false;
     if (fRamp    !== 'All' && e.rampStatus!== fRamp)    return false;
     return true;
