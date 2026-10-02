@@ -1010,6 +1010,40 @@ var GL_SUMMARY       = [];    // per-fiscal-period go-live summary (populated by
 // Per-person utilization targets (%). Default 70; these four are 50.
 var UTIL_TARGETS     = { 'ken miller': 50, 'taha najar': 50, 'kevin shah': 50, 'kumar venkatasubramanian': 50 };
 function utilTargetFor(name) { return UTIL_TARGETS[String(name || '').trim().toLowerCase()] || 70; }
+
+// Manual reporting-line overrides for the Utilization tab, for cases the source
+// report gets wrong. Key = report, value = their manager. Either side can be a
+// full name or a first name that is unique in PS User Records.
+var UT_MANAGER_OVERRIDES = {
+  'Reza': 'Deji'
+};
+
+// Resolve a full or first name against the real names in the data. Returns the
+// real name, or null if not found / ambiguous (more than one match).
+function utResolveName(token, names) {
+  var t = String(token || '').trim().toLowerCase();
+  if (!t) return null;
+  var byLower = {};
+  names.forEach(function(n) { if (n) byLower[n.toLowerCase()] = n; });
+  if (byLower[t]) return byLower[t];
+  var hits = Object.keys(byLower).filter(function(k) {
+    return k.split(/\s+/)[0] === t || k.indexOf(t + ' ') === 0;
+  });
+  if (hits.length === 1) return byLower[hits[0]];
+  if (hits.length > 1) console.warn('Manager override: "' + token + '" is ambiguous:', hits);
+  return null;
+}
+
+// → { reportNameLowercase: managerRealName } for overrides that resolve cleanly.
+function utManagerOverrides(names) {
+  var out = {};
+  Object.keys(UT_MANAGER_OVERRIDES).forEach(function(rep) {
+    var r = utResolveName(rep, names), m = utResolveName(UT_MANAGER_OVERRIDES[rep], names);
+    if (r && m) out[r.toLowerCase()] = m;
+    else console.warn('Manager override not applied:', rep, '→', UT_MANAGER_OVERRIDES[rep]);
+  });
+  return out;
+}
 var GL_OPEN_QUARTERS = {};   // safeId → boolean; persists expanded state across filter changes
 
 var TAB_META = {
@@ -2964,6 +2998,17 @@ function renderUtilization() {
   var iUM = hi(us,'Manager Name');   if (iUM < 0) iUM = hi(us,'Manager');
   var iUR = hi(us,'Region');
 
+  // Manual reporting-line overrides (UT_MANAGER_OVERRIDES), resolved against the
+  // names actually present in PS User Records.
+  var utNames = [];
+  us.data.forEach(function(r) {
+    var n  = iUN >= 0 ? String(r[iUN]||'').trim() : '';
+    var mg = iUM >= 0 ? String(r[iUM]||'').trim() : '';
+    if (n) utNames.push(n);
+    if (mg) utNames.push(mg);
+  });
+  var mgrOverride = utManagerOverrides(utNames);   // reportLower → manager name
+
   var enriched = [];
   us.data.forEach(function(r) {
     var fullName = iUN >= 0 ? String(r[iUN]||'').trim() : '';
@@ -3030,7 +3075,7 @@ function renderUtilization() {
       role:        role,
       startDate:   startStr,
       rampStatus:  rampAtPeriod,
-      manager:     iUM >= 0 ? String(r[iUM]||'').trim() : '',
+      manager:     mgrOverride[fullName.toLowerCase()] || (iUM >= 0 ? String(r[iUM]||'').trim() : ''),
       region:      iUR >= 0 ? String(r[iUR]||'').trim() : '',
       rampEndDate: rampEndDate,        // ramp cutoff (null = none) — used by the trend chart
       billableHrs: billableHrs,
@@ -3057,7 +3102,7 @@ function renderUtilization() {
     var reportsOf = {};  // manager (lowercase) → [report full names]
     us.data.forEach(function(r) {
       var n  = iUN >= 0 ? String(r[iUN]||'').trim() : '';
-      var mg = iUM >= 0 ? String(r[iUM]||'').trim() : '';
+      var mg = mgrOverride[n.toLowerCase()] || (iUM >= 0 ? String(r[iUM]||'').trim() : '');
       if (!n || !mg) return;
       var mk = mg.toLowerCase();
       (reportsOf[mk] = reportsOf[mk] || []).push(n);
