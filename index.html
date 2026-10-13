@@ -7104,11 +7104,9 @@ function buildBacklogPayload(fy, curQLabel, curQRange) {
     }
   }
 
-  var BA_MULTIPLIERS  = { AMER: 1.22, EMEA: 1.32, APAC: 1.44 };
-  var BA_HOURLY_RATE  = 275;
-  var BA_CONS_PCT     = 0.7;
-  var BA_EM_PCT       = 0.3;
-  var BA_HRS_PER_PERSON = 520;
+  // Use the dashboard's Backlog Analysis constants (declared once, globally) so
+  // the deck can never drift from what the Backlog tab shows.
+  var BA_CONS_PCT = BA_CONSULTANT_PCT;
 
   function getBaNum(q, region, field) { return baParseNum(BACKLOG['ba_' + fy + '_' + q + '_' + region + '_' + field]); }
   function getBfActuals(q, region)    { return bfParseNum(BOOKINGS[fy + '_' + q + '_' + region + '_actuals']); }
