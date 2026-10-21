@@ -1011,6 +1011,27 @@ var GL_SUMMARY       = [];    // per-fiscal-period go-live summary (populated by
 var UTIL_TARGETS     = { 'ken miller': 50, 'taha najar': 50, 'kevin shah': 50, 'kumar venkatasubramanian': 50 };
 function utilTargetFor(name) { return UTIL_TARGETS[String(name || '').trim().toLowerCase()] || 70; }
 
+// People to leave out of the Utilization tab entirely (table, KPIs, Missing
+// Timecards, trend chart, filter options) and the deck's utilization slides —
+// e.g. listed in PS User Records but not part of the team. Full names,
+// case-insensitive.
+var UT_EXCLUDED_PEOPLE = ['Kathleen Mello'];
+
+// PS User Records with excluded people removed (same { hdrs, data } shape).
+function utRosterSheet() {
+  var us = SHEETS.psUserRecords;
+  if (!us) return us;
+  var iUN = hi(us,'Full Name'); if (iUN < 0) iUN = hi(us,'Name');
+  var ex = {};
+  UT_EXCLUDED_PEOPLE.forEach(function(n) { ex[String(n).trim().toLowerCase()] = 1; });
+  return {
+    hdrs: us.hdrs,
+    data: us.data.filter(function(r) {
+      return !ex[String(iUN >= 0 ? r[iUN] : '').trim().toLowerCase()];
+    })
+  };
+}
+
 // Manual reporting-line overrides for the Utilization tab, for cases the source
 // report gets wrong. Key = report, value = their manager. Either side can be a
 // full name or a first name that is unique in PS User Records.
@@ -1396,7 +1417,7 @@ function seedFilters() {
     fillSel('cu-consult', uniq(s.data, hi(s,'Primary Consultant')));
   }
   if (SHEETS.psUserRecords) {
-    var us = SHEETS.psUserRecords;
+    var us = utRosterSheet();
     var iUN = hi(us,'Full Name'); if (iUN < 0) iUN = hi(us,'Name');
     var iUT = hi(us,'Title');
     var iUS = hi(us,'User Start Day'); if (iUS < 0) iUS = hi(us,'Start Date');
@@ -2991,7 +3012,7 @@ function renderUtilization() {
   });
 
   // ── PS User Records ──────────────────────────────────────────
-  var us  = SHEETS.psUserRecords;
+  var us  = utRosterSheet();
   var iUN = hi(us,'Full Name'); if (iUN < 0) iUN = hi(us,'Name');
   var iUT = hi(us,'Title');
   var iUS = hi(us,'User Start Day'); if (iUS < 0) iUS = hi(us,'Start Date');
@@ -3456,7 +3477,7 @@ var UT_TREND_SEEDED = false;
 // Seed the chart's region / role / fiscal-quarter filters (once per data load).
 function utTrendSeedFilters() {
   if (UT_TREND_SEEDED) return;
-  var hs = SHEETS.hoursData, us = SHEETS.psUserRecords;
+  var hs = SHEETS.hoursData, us = utRosterSheet();
   if (!hs || !us) return;
   var regions = uniq(us.data, hi(us,'Region'));
   var iDate = hi(hs,'Date'), qset = {};
@@ -3473,7 +3494,7 @@ function utTrendSeedFilters() {
 }
 
 function renderUtTrend() {
-  var hs = SHEETS.hoursData, us = SHEETS.psUserRecords;
+  var hs = SHEETS.hoursData, us = utRosterSheet();
   if (!hs || !us) { UT_TREND = null; drawUtTrend(); return; }
   utTrendSeedFilters();
 
@@ -6908,7 +6929,7 @@ function buildUtilizationPayload(curQLabel, curQRange) {
     hoursMap[k].push(r);
   });
 
-  var us  = SHEETS.psUserRecords;
+  var us  = utRosterSheet();
   var iUN = hi(us,'Full Name'); if (iUN < 0) iUN = hi(us,'Name');
   var iUT = hi(us,'Title');
   var iUS = hi(us,'User Start Day'); if (iUS < 0) iUS = hi(us,'Start Date');
