@@ -709,9 +709,10 @@ th { position: relative; }
                 <th onclick="srt('ut',6)">Billable Hours ↕</th>
                 <th onclick="srt('ut',7)">Billable Util % ↕</th>
                 <th onclick="srt('ut',8)">PTO Adj. Billable Util % ↕</th>
-                <th onclick="srt('ut',9)">Total Util % ↕</th>
-                <th onclick="srt('ut',10)">Util Target % ↕</th>
-                <th onclick="srt('ut',11)">Working Hours ↕</th>
+                <th onclick="srt('ut',9)" title="Billable hours + General Product Issues, Hiring / Interviews, Partner Enablement, Personal Development, Presales / Business Development, Program Management, PS Training Instructor &amp; Content Development, Shadowing — ÷ working hours">Strategic Util % ↕</th>
+                <th onclick="srt('ut',10)">Total Util % ↕</th>
+                <th onclick="srt('ut',11)">Util Target % ↕</th>
+                <th onclick="srt('ut',12)">Working Hours ↕</th>
               </tr></thead>
               <tbody id="ut-body"></tbody>
             </table>
@@ -1010,6 +1011,17 @@ var GL_SUMMARY       = [];    // per-fiscal-period go-live summary (populated by
 // Per-person utilization targets (%). Default 70; these four are 50.
 var UTIL_TARGETS     = { 'ken miller': 50, 'taha najar': 50, 'kevin shah': 50, 'kumar venkatasubramanian': 50 };
 function utilTargetFor(name) { return UTIL_TARGETS[String(name || '').trim().toLowerCase()] || 70; }
+
+// Administration types that count toward Strategic Util % (on top of billable
+// hours). Matched loosely: case, spaces and punctuation are ignored.
+function utAdmKey(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+var UT_STRATEGIC_ADMIN = {};
+['General Product Issues', 'Hiring / Interviews', 'Partner Enablement', 'Personal Development',
+ 'Presales / Business Development', 'Program Management',
+ 'PS Training Instructor & Content Development', 'Shadowing',
+ // tolerate common misspellings in the source data
+ 'PS Training Instructor & Content Developement', 'Program Mangagement'
+].forEach(function(n) { UT_STRATEGIC_ADMIN[utAdmKey(n)] = 1; });
 
 // People to leave out of the Utilization tab entirely (table, KPIs, Missing
 // Timecards, trend chart, filter options) and the deck's utilization slides —
@@ -2856,7 +2868,7 @@ function renderUtilization() {
   if (!SHEETS.hoursData && !HOURS_LOADING) {
     HOURS_LOADING = true;
     el.innerHTML =
-      '<tr><td colspan="12" style="text-align:center;padding:48px 0;color:var(--text-muted)">' +
+      '<tr><td colspan="13" style="text-align:center;padding:48px 0;color:var(--text-muted)">' +
         '<div style="display:flex;align-items:center;justify-content:center;gap:12px">' +
           '<div class="spinner" style="width:20px;height:20px;border-width:2px"></div>' +
           '<span>Loading utilization data…</span>' +
@@ -2873,7 +2885,7 @@ function renderUtilization() {
         var r;
         try { r = JSON.parse(json); } catch(e) { r = { success: false, error: String(e) }; }
         if (!r.success) {
-          el.innerHTML = '<tr><td colspan="12" class="empty">⚠ ' + esc(r.error || 'Failed to load hours data') + '</td></tr>';
+          el.innerHTML = '<tr><td colspan="13" class="empty">⚠ ' + esc(r.error || 'Failed to load hours data') + '</td></tr>';
           return;
         }
         SHEETS.hoursData = mkSheet(r.rows);
@@ -2882,7 +2894,7 @@ function renderUtilization() {
       })
       .withFailureHandler(function(err) {
         HOURS_LOADING = false;
-        el.innerHTML = '<tr><td colspan="12" class="empty">⚠ ' + esc(err.message || String(err)) + '</td></tr>';
+        el.innerHTML = '<tr><td colspan="13" class="empty">⚠ ' + esc(err.message || String(err)) + '</td></tr>';
       })
       .getHoursData();
     return;
@@ -2892,7 +2904,7 @@ function renderUtilization() {
   if (HOURS_LOADING) return;
 
   if (!SHEETS.psUserRecords) {
-    el.innerHTML = '<tr><td colspan="12" class="empty">No PS User Records sheet found in this spreadsheet.</td></tr>';
+    el.innerHTML = '<tr><td colspan="13" class="empty">No PS User Records sheet found in this spreadsheet.</td></tr>';
     ['ut-kpi-billable','ut-kpi-pto','ut-kpi-total-bill-hrs','ut-kpi-resources','ut-kpi-missing',
      'ut-first-day','ut-last-day','ut-working-days','ut-avail-hours'].forEach(function(id) {
       var e = document.getElementById(id); if (e) e.textContent = '—';
@@ -3068,16 +3080,19 @@ function renderUtilization() {
     });
 
     // ── Compute hours ─────────────────────────────────────────
-    var billableHrs = 0, ptoHrs = 0, totalHrs = 0, admBreakdown = {};
+    var billableHrs = 0, ptoHrs = 0, totalHrs = 0, strategicHrs = 0, admBreakdown = {};
     hrsRows.forEach(function(hr) {
       var h     = iHrsHrs  >= 0 ? (parseFloat(hr[iHrsHrs])  || 0) : 0;
       var adm   = iHrsAdm  >= 0 ? String(hr[iHrsAdm] ||'').trim() : '';
       totalHrs += h;
       var admLower = adm.toLowerCase();
       var isBillableAdm = admLower === 'program management' || admLower === 'general product issues' || admLower === 'customer travel';
-      if (utIsBillable(hr)) {
+      var billable = utIsBillable(hr);
+      if (billable) {
         billableHrs += h;
       }
+      // Strategic = billable OR a strategic admin type (each entry counted once)
+      if (billable || UT_STRATEGIC_ADMIN[utAdmKey(adm)]) strategicHrs += h;
       // Track non-billable admin types for the breakdown panel —
       // includes any row with a non-billable admin type, even if it also has a project
       if (adm !== '' && !isBillableAdm) {
@@ -3090,6 +3105,7 @@ function renderUtilization() {
     var adjHrs     = Math.max(effectiveWorkHrs - ptoHrs, 0);
     var ptoAdjUtil = adjHrs > 0 ? (billableHrs / adjHrs * 100) : null;
     var totalUtil  = effectiveWorkHrs > 0 ? (totalHrs / effectiveWorkHrs * 100) : null;
+    var strategicUtil = effectiveWorkHrs > 0 ? (strategicHrs / effectiveWorkHrs * 100) : null;
 
     enriched.push({
       resource:    fullName,
@@ -3104,6 +3120,8 @@ function renderUtilization() {
       workingHrs:  effectiveWorkHrs,   // weekdays from max(periodStart, startDate+90) × 8
       billUtil:    billUtil,
       ptoAdjUtil:  ptoAdjUtil,
+      strategicUtil: strategicUtil,
+      strategicHrs:  strategicHrs,
       totalUtil:   totalUtil,
       ptoHrs:      ptoHrs,
       admBreakdown: admBreakdown
@@ -3202,7 +3220,7 @@ function renderUtilization() {
   }
 
   if (rows.length === 0) {
-    el.innerHTML = '<tr><td colspan="12" class="empty">No records match the selected filters.</td></tr>';
+    el.innerHTML = '<tr><td colspan="13" class="empty">No records match the selected filters.</td></tr>';
     renderUtTrend();   // chart has its own filters — render it regardless
     return;
   }
@@ -3254,7 +3272,7 @@ function renderUtilization() {
     }).join('');
 
     var detailHtml = hasBreakdown
-      ? '<tr id="ut-dr-' + idx + '" class="ut-detail-row" data-detail="' + idx + '" style="display:none"><td colspan="12">' +
+      ? '<tr id="ut-dr-' + idx + '" class="ut-detail-row" data-detail="' + idx + '" style="display:none"><td colspan="13">' +
         '<div class="ut-detail-panel">' +
         '<div class="ut-detail-title">Administration Hours Breakdown</div>' +
         '<table>' + detailRows + '</table>' +
@@ -3275,6 +3293,7 @@ function renderUtilization() {
       '<td style="text-align:right">'  + fmtH(e.billableHrs)  + '</td>' +
       '<td style="text-align:center">' + fmtPctT(e.billUtil, tgt)   + '</td>' +
       '<td style="text-align:center">' + fmtPctT(e.ptoAdjUtil, tgt) + '</td>' +
+      '<td style="text-align:center">' + fmtPctWhite(e.strategicUtil) + '</td>' +
       '<td style="text-align:center">' + fmtPctWhite(e.totalUtil)   + '</td>' +
       '<td style="text-align:center"><span style="color:var(--text-dim);font-weight:600">' + tgt + '%</span></td>' +
       '<td style="text-align:right">'  + fmtH(e.workingHrs)   + '</td>' +
