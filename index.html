@@ -3844,11 +3844,11 @@ function scDollars(v) { return '$' + Math.round(v || 0).toLocaleString(); }
 function scDim(t) { return '<span style="color:var(--text-dim)">' + (t || '—') + '</span>'; }
 function scProjLink(id, name) {
   return id ? '<a href="https://redis.lightning.force.com/lightning/r/project_cloud__Project__c/' + esc(id) +
-    '/view" target="_blank" style="color:var(--red);text-decoration:none">' + esc(name || '(no name)') + '</a>' : esc(name);
+    '/view" target="_blank" style="color:#fff;text-decoration:underline">' + esc(name || '(no name)') + '</a>' : esc(name);
 }
 function scOppLink(id, name) {
   return id ? '<a href="https://redis.lightning.force.com/lightning/r/Opportunity/' + esc(id) +
-    '/view" target="_blank" style="color:var(--red);text-decoration:none">' + esc(name || '(no name)') + '</a>' : esc(name);
+    '/view" target="_blank" style="color:#fff;text-decoration:underline">' + esc(name || '(no name)') + '</a>' : esc(name);
 }
 function scBox(value, sub, cls, isTotal, key) {
   var d = key && SC_DETAIL[key], click = !!(d && d.rows.length);
