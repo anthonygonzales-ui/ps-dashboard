@@ -167,6 +167,7 @@ select:focus { outline: none; border-color: var(--red); }
 .sc-val { font-size:22px; font-weight:700; line-height:1.15; }
 .sc-sub { font-size:10.5px; color:var(--text-muted); margin-top:4px; font-weight:400; line-height:1.4; }
 .sc-money { color:var(--text); font-size:12px; }
+.sc-next { min-width:260px; max-width:420px; white-space:normal; font-size:11px; line-height:1.4; color:var(--text-muted); max-height:5.6em; overflow-y:auto; }
 .sc-box.click { cursor:pointer; transition:border-color .12s, transform .12s; }
 .sc-box.click:hover { border-color:var(--red); transform:translateY(-1px); }
 .sc-modal { position:fixed; inset:0; background:rgba(5,5,15,0.72); display:none; align-items:center; justify-content:center; z-index:1000; padding:24px; }
@@ -3903,13 +3904,20 @@ function renderRegionalScorecard() {
     var iReg = hi(ap,'Region'), iPS = hiPSStatus(ap), iHO = hi(ap,'Sales to PS Handoff Date'), iKO = hi(ap,'Project Kickoff Date');
     var iEn = hi(ap,'Entered Hours'), iAG = hi(ap,'Actual Go Live Date'), iRT = hi(ap,'Opportunity: Opportunity Record Type');
     var iAc = hi(ap,'Account'), iPN = hi(ap,'Project: Project Name'), iID = hi(ap,'Project: ID');
-    var iOw = hi(ap,'Project: Owner Name'), iCo = hi(ap,'Primary Consultant'), iHe = hi(ap,'Health'), iHR = hi(ap,'Hours Remaining');
+    var iOw = hi(ap,'Project: Owner Name'), iHe = hi(ap,'Health'), iHR = hi(ap,'Hours Remaining'), iNS = hi(ap,'Project Next Steps');
+    var iCD = hi(ap,'Opportunity: Close Date'); if (iCD < 0) iCD = hi(ap,'Opportunity Close Date');
     function cell(r, i) { return i >= 0 ? String(r[i] == null ? '' : r[i]).trim() : ''; }
+    // Date the project entered its current stage (On Hold has no reliable date)
+    var SC_STAGE_ENTRY = { 'Awaiting Handoff': iCD, 'Awaiting Kickoff': iHO, 'In Progress': iKO,
+                           'New Logo Awaiting Go Live': iKO, 'New Logo Live / Awaiting Closure': iAG };
     ap.data.forEach(function(r) {
       var st = computeStage(r, iPS, iHO, iKO, iEn, iAG, iRT);
       var g  = iReg >= 0 ? scGeo(r[iReg]) : null;
+      var ie = SC_STAGE_ENTRY[st], ed = ie != null && ie >= 0 ? parseDate(r[ie]) : null;
+      if (ed) ed.setHours(0, 0, 0, 0);
       var it = { acc: cell(r, iAc), name: cell(r, iPN), id: cell(r, iID), stage: st, owner: cell(r, iOw),
-                 cons: cell(r, iCo), health: cell(r, iHe), hrs: iHR >= 0 ? scNum(r[iHR]) : null, region: cell(r, iReg) };
+                 health: cell(r, iHe), hrs: iHR >= 0 ? scNum(r[iHR]) : null, region: cell(r, iReg),
+                 days: ed ? Math.max(0, Math.round((today - ed) / 86400000)) : null, next: cell(r, iNS) };
       addL(stageL[stageL[st] ? st : 'Other'], g, it);
       addL(openL, g, it);
     });
@@ -3944,7 +3952,8 @@ function renderRegionalScorecard() {
       var sd = iUS >= 0 ? parseDate(r[iUS]) : null;
       var rampEnd = sd ? new Date(sd.getTime() + 90 * 86400000) : null;
       if (rampEnd) rampEnd.setHours(0, 0, 0, 0);
-      people[name.toLowerCase()] = { name: name, geo: iUR >= 0 ? scGeo(r[iUR]) : null, role: role, rampEnd: rampEnd, wkBill: 0, qBill: 0 };
+      people[name.toLowerCase()] = { name: name, geo: iUR >= 0 ? scGeo(r[iUR]) : null, role: role, rampEnd: rampEnd,
+                                     wkBill: 0, wkPto: 0, qBill: 0, qPto: 0, qStrat: 0 };
     });
     var iHN = hi(hs,'Work: Owner Name'); if (iHN < 0) iHN = hi(hs,'Work Owner Name');
     var iHD = hi(hs,'Date'), iHH = hi(hs,'Hours (Number)');
@@ -3954,19 +3963,29 @@ function renderRegionalScorecard() {
       var d = iHD >= 0 ? parseDate(r[iHD]) : null; if (!d) return; d.setHours(0, 0, 0, 0);
       if (d > lastSatEnd) return;
       if (p.rampEnd && d < p.rampEnd) return;             // ramp period excluded (matches Utilization tab)
-      if (!psIsBillable(r, iHP, iHT, iHA)) return;
-      var h = iHH >= 0 ? scNum(r[iHH]) : 0;
-      if (d >= wkStart) p.wkBill += h;
-      if (d >= qStart)  p.qBill  += h;
+      var h   = iHH >= 0 ? scNum(r[iHH]) : 0;
+      var adm = iHA >= 0 ? String(r[iHA] || '').trim() : '';
+      var bill = psIsBillable(r, iHP, iHT, iHA);
+      var pto  = adm === 'PTO / Holiday / Sick';                // same rule as the Utilization tab
+      if (d >= wkStart) { if (bill) p.wkBill += h; if (pto) p.wkPto += h; }
+      if (d >= qStart) {
+        if (bill) p.qBill += h;
+        if (pto)  p.qPto  += h;
+        if (bill || UT_STRATEGIC_ADMIN[utAdmKey(adm)]) p.qStrat += h;
+      }
     });
     Object.keys(people).forEach(function(k) {
       var p = people[k];
       var ws = (p.rampEnd && p.rampEnd > wkStart) ? p.rampEnd : wkStart;
       var wdW = ws <= lastSat ? countWeekdays(ws, lastSat) : 0;
-      if (wdW > 0) addL(wkL[p.role], p.geo, { name: p.name, bill: p.wkBill, pw: wdW / 5, avg: p.wkBill / (wdW / 5) });
+      if (wdW > 0) addL(wkL[p.role], p.geo, { name: p.name, bill: p.wkBill, pto: p.wkPto, pw: wdW / 5, avg: p.wkBill / (wdW / 5) });
       var qs = (p.rampEnd && p.rampEnd > qStart) ? p.rampEnd : qStart;
       var wdQ = qs <= lastSat ? countWeekdays(qs, lastSat) : 0;
-      if (wdQ > 0) addL(utL, p.geo, { name: p.name, role: p.role, bill: p.qBill, work: wdQ * 8, util: p.qBill / (wdQ * 8) * 100 });
+      if (wdQ > 0) {
+        var work = wdQ * 8, adj = Math.max(work - p.qPto, 0);
+        addL(utL, p.geo, { name: p.name, role: p.role, bill: p.qBill, work: work, util: p.qBill / work * 100,
+                           ptoAdj: adj > 0 ? p.qBill / adj * 100 : null, strat: p.qStrat / work * 100 });
+      }
     });
   }
 
@@ -4006,22 +4025,24 @@ function renderRegionalScorecard() {
 
   // ── Detail lists behind each box ─────────────────────────────
   function det(key, title, sub, head, rows) { SC_DETAIL[key] = { title: title, sub: sub, head: head, rows: rows }; }
-  var PROJ_HEAD = ['Account', 'Project', 'Stage', 'Region', 'Owner', 'Primary Consultant', 'Health', 'Hrs Remaining'];
+  var PROJ_HEAD = ['Account', 'Project', 'Stage', 'Days in Stage', 'Owner', 'Health', 'Hrs Remaining', 'Project Next Steps'];
   function projRows(list) {
     return list.slice().sort(function(a, b) { return a.acc.localeCompare(b.acc) || a.name.localeCompare(b.name); }).map(function(it) {
-      return [esc(it.acc), scProjLink(it.id, it.name), stageBadge(it.stage), esc(it.region), esc(it.owner),
-              it.cons ? esc(it.cons) : scDim('unassigned'), healthBadge(it.health),
-              it.hrs == null ? scDim() : Math.round(it.hrs).toLocaleString()];
+      return [esc(it.acc), scProjLink(it.id, it.name), stageBadge(it.stage),
+              it.days == null ? scDim() : it.days + 'd', esc(it.owner), healthBadge(it.health),
+              it.hrs == null ? scDim() : Math.round(it.hrs).toLocaleString(),
+              it.next ? '<div class="sc-next">' + esc(it.next) + '</div>' : scDim()];
     });
   }
-  var DEAL_HEAD = ['#', 'Account', 'Opportunity', 'PS Rollup', 'Close Date', 'VP Forecast', 'Stage', 'Region'];
+  var DEAL_HEAD = ['#', 'Account', 'Opportunity', 'PS Rollup', 'Close Date', 'VP Forecast', 'Region'];
   function dealRows(list, numbered) {
     return list.slice().sort(function(a, b) { return b.ps - a.ps || a.acc.localeCompare(b.acc); }).map(function(it, i) {
       return [numbered ? String(i + 1) : '', esc(it.acc), scOppLink(it.id, it.opp), '<b>' + scDollars(it.ps) + '</b>',
               it.close.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              esc(it.fc) || scDim(), esc(it.stage), esc(it.region)];
+              esc(it.fc) || scDim(), esc(it.region)];
     });
   }
+  function pct(v) { return v == null ? scDim() : Math.round(v) + '%'; }
   COLS.forEach(function(c) {
     det('open|' + c, colTitle(c) + ' · All open projects', openL[c].length + ' projects', PROJ_HEAD, projRows(openL[c]));
     SC_STAGES.concat([['Other']]).forEach(function(s, si) {
@@ -4032,20 +4053,22 @@ function renderRegionalScorecard() {
       var L = wkL[role][c].slice().sort(function(a, b) { return b.avg - a.avg; });
       det('wk' + ri + '|' + c, colTitle(c) + ' · ' + (ri ? 'Engagement Managers' : 'Consultants') + ' — avg billable hours / week',
         'Last ' + SC_WEEKS + ' completed weeks (' + scFmtD(wkStart) + ' – ' + scFmtD(lastSat) + '). Weeks before a person’s 90-day ramp-up ends are not counted.',
-        ['#', 'Name', 'Avg billable hrs / wk', 'Billable hrs', 'Weeks counted'],
+        ['#', 'Name', 'Avg billable hrs / wk', 'Billable hrs', 'PTO hrs'],
         L.map(function(p, i) {
-          return [String(i + 1), esc(p.name), '<b>' + p.avg.toFixed(1) + '</b>', Math.round(p.bill).toLocaleString(), p.pw.toFixed(1)];
+          return [String(i + 1), esc(p.name), '<b>' + p.avg.toFixed(1) + '</b>', Math.round(p.bill).toLocaleString(),
+                  p.pto ? Math.round(p.pto).toLocaleString() : scDim('0')];
         }));
     });
     var U = utL[c].slice().sort(function(a, b) { return b.util - a.util; });
     det('ut|' + c, colTitle(c) + ' · Billable utilization ' + qLabel + ' to date',
-      scFmtD(qStart) + ' – ' + scFmtD(lastSat) + '. Colored against each person’s utilization target (as on the Utilization tab).',
-      ['#', 'Name', 'Role', 'Billable util %', 'Target', 'Billable hrs', 'Working hrs'],
+      scFmtD(qStart) + ' – ' + scFmtD(lastSat) + '. Billable util % is colored against each person’s target (as on the Utilization tab). ' +
+      'PTO Adj = billable ÷ (working − PTO hrs). Billable + Strategic adds the strategic admin types.',
+      ['#', 'Name', 'Role', 'Billable util %', 'PTO Adj util %', 'Billable + Strategic util %', 'Billable hrs', 'Working hrs'],
       U.map(function(p, i) {
         var tgt = utilTargetFor(p.name);
         var col = p.util >= tgt ? 'var(--green)' : (p.util >= tgt - 15 ? 'var(--yellow)' : 'var(--red)');
-        return [String(i + 1), esc(p.name), esc(p.role), '<b style="color:' + col + '">' + Math.round(p.util) + '%</b>', tgt + '%',
-                Math.round(p.bill).toLocaleString(), Math.round(p.work).toLocaleString()];
+        return [String(i + 1), esc(p.name), esc(p.role), '<b style="color:' + col + '">' + Math.round(p.util) + '%</b>',
+                pct(p.ptoAdj), pct(p.strat), Math.round(p.bill).toLocaleString(), Math.round(p.work).toLocaleString()];
       }));
     var wonRows = dealRows(wonL[c], true);
     if (wonNoPsL[c].length) wonRows = wonRows.concat([{ section: 'Closed won with no PS (not counted above)' }], dealRows(wonNoPsL[c], false));
