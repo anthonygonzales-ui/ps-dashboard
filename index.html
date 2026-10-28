@@ -155,13 +155,18 @@ select:focus { outline: none; border-color: var(--red); }
 .ut-trend-btn:hover { color:var(--text); }
 .ut-trend-btn.active { background:var(--red); color:#fff; font-weight:600; }
 #ut-trend-canvas { max-height:none !important; }
-#df-stage-chart { max-height:none !important; }
-.df-note { font-size:11px; color:var(--text-muted); margin-bottom:6px; }
-.df-h { font-size:13px; font-weight:700; margin:22px 0 10px; color:var(--text); text-transform:uppercase; letter-spacing:0.04em; }
-.df-n { font-size:10px; color:var(--text-dim); margin-left:4px; font-weight:400; }
-.df-slow { color:var(--red); font-weight:700; }
-.df-bar { display:inline-block; height:8px; background:var(--red); border-radius:4px; vertical-align:middle; margin-right:8px; }
-#panel-delivery-flow th { cursor:default; }
+.sc-note { font-size:11px; color:var(--text-muted); margin-bottom:12px; }
+.sc-scroll { overflow-x:auto; padding-bottom:4px; }
+.sc-grid { display:grid; grid-template-columns:minmax(180px,1.2fr) repeat(4, minmax(130px,1fr)); gap:10px; min-width:780px; align-items:stretch; }
+.sc-colhead { font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; text-align:center; align-self:end; padding-bottom:2px; }
+.sc-section { grid-column:1 / -1; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin-top:14px; padding-bottom:5px; border-bottom:1px solid var(--border); }
+.sc-section .sc-sub { text-transform:none; letter-spacing:0; margin-left:6px; }
+.sc-rowhead { display:flex; flex-direction:column; justify-content:center; font-size:12.5px; font-weight:600; }
+.sc-box { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px 14px; text-align:center; display:flex; flex-direction:column; justify-content:center; }
+.sc-box.total { background:var(--bg-card2); }
+.sc-val { font-size:22px; font-weight:700; line-height:1.15; }
+.sc-sub { font-size:10.5px; color:var(--text-muted); margin-top:4px; font-weight:400; line-height:1.4; }
+.sc-money { color:var(--text); font-size:12px; }
 .utf-group { display:flex; flex-direction:column; gap:4px; }
 .utf-group > label { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; }
 tr.ut-data-row:hover > td { background:var(--bg-card) !important; }
@@ -336,8 +341,8 @@ th { position: relative; }
         <span class="nav-icon">✨</span> Insights
       </div>
       <div class="nav-section" id="nav-section-analytics" style="display:none">Analytics</div>
-      <div class="nav-item" onclick="switchTab('delivery-flow')" id="nav-delivery-flow" style="display:none">
-        <span class="nav-icon">🧭</span> Delivery Flow
+      <div class="nav-item" onclick="switchTab('regional-scorecard')" id="nav-regional-scorecard" style="display:none">
+        <span class="nav-icon">🧭</span> Regional Scorecard
       </div>
     </nav>
   </aside>
@@ -780,72 +785,11 @@ th { position: relative; }
       </div>
 
       <!-- ═══════════════════════════════════════════════
-           TAB: DELIVERY FLOW (private — DF_ALLOWED only)
+           TAB: REGIONAL SCORECARD (private — SC_ALLOWED only)
       ═══════════════════════════════════════════════ -->
-      <div id="panel-delivery-flow" class="panel">
-        <div class="df-note">Private view — only visible to you. AMER = North America + LATAM. Medians shown with sample size (n). <b>Stale</b> = waiting more than <span id="df-stale-days">30</span> days.</div>
-
-        <div class="df-h">1 · Where projects get stuck</div>
-        <div class="tbl-wrap">
-          <div class="tbl-head"><span class="tbl-head-title">Median days per stage</span><span class="tbl-head-sub" id="df-stage-sub"></span></div>
-          <div class="tbl-scroll"><table>
-            <thead><tr><th>Stage</th><th>AMER</th><th>EMEA</th><th>APAC</th><th>Global</th></tr></thead>
-            <tbody id="df-stage-body"></tbody>
-          </table></div>
-        </div>
-        <div class="chart-card" style="margin-top:12px">
-          <div class="chart-card-title">Where the time goes — median days per stage</div>
-          <div style="position:relative;height:220px"><canvas id="df-stage-chart"></canvas></div>
-        </div>
-
-        <div class="df-h">2 · Stuck work right now</div>
-        <div class="kpi-row" id="df-kpis"></div>
-        <div class="tbl-wrap">
-          <div class="tbl-head"><span class="tbl-head-title">Waiting to start, by region</span><span class="tbl-head-sub">Awaiting Handoff ages from Opp Close Date · Awaiting Kickoff ages from Handoff Date</span></div>
-          <div class="tbl-scroll"><table>
-            <thead><tr><th>Region</th><th>Awaiting Handoff</th><th>Median wait</th><th>Stale</th><th>Awaiting Kickoff</th><th>Median wait</th><th>Stale</th></tr></thead>
-            <tbody id="df-wait-body"></tbody>
-          </table></div>
-        </div>
-        <div class="tbl-wrap" style="margin-top:12px">
-          <div class="tbl-head"><span class="tbl-head-title">Longest waiting — top 10</span></div>
-          <div class="tbl-scroll"><table>
-            <thead><tr><th>Account</th><th>Project</th><th>Stage</th><th>Region</th><th>Waiting</th><th>Owner</th><th>Primary Consultant</th></tr></thead>
-            <tbody id="df-oldest-body"></tbody>
-          </table></div>
-        </div>
-        <div class="chart-grid" style="margin-top:12px">
-          <div class="tbl-wrap" style="margin-top:0">
-            <div class="tbl-head"><span class="tbl-head-title">On Hold by region</span></div>
-            <div class="tbl-scroll"><table>
-              <thead><tr><th>Region</th><th>Open</th><th>On Hold</th><th>% On Hold</th></tr></thead>
-              <tbody id="df-hold-body"></tbody>
-            </table></div>
-          </div>
-          <div class="tbl-wrap" style="margin-top:0">
-            <div class="tbl-head"><span class="tbl-head-title">On Hold reasons</span><span class="tbl-head-sub">most common first</span></div>
-            <div class="tbl-scroll"><table>
-              <thead><tr><th>Reason</th><th>#</th><th>% of On Hold</th></tr></thead>
-              <tbody id="df-reason-body"></tbody>
-            </table></div>
-          </div>
-        </div>
-        <div class="tbl-wrap">
-          <div class="tbl-head"><span class="tbl-head-title">New Logo Awaiting Go Live — ARR waiting on delivery</span><span class="tbl-head-sub" id="df-nl-sub"></span></div>
-          <div class="tbl-scroll"><table>
-            <thead><tr><th>Region</th><th>Projects</th><th>New ARR</th><th>Median days since kickoff</th></tr></thead>
-            <tbody id="df-nl-body"></tbody>
-          </table></div>
-        </div>
-
-        <div class="df-h">3 · Open projects per consultant</div>
-        <div class="tbl-wrap">
-          <div class="tbl-head"><span class="tbl-head-title">Primary Consultant load</span><span class="tbl-head-sub" id="df-cons-sub"></span></div>
-          <div class="tbl-scroll"><table>
-            <thead><tr><th>Primary Consultant</th><th>Open projects</th><th>In progress</th><th>Waiting to start</th><th>On Hold</th><th>Hours remaining</th><th>Regions</th></tr></thead>
-            <tbody id="df-cons-body"></tbody>
-          </table></div>
-        </div>
+      <div id="panel-regional-scorecard" class="panel">
+        <div class="sc-note" id="sc-note"></div>
+        <div class="sc-scroll"><div id="sc-grid"></div></div>
       </div>
 
       <!-- ═══════════════════════════════════════════════
@@ -1214,10 +1158,10 @@ var TAB_META = {
     panel:  'panel-insights',
     navIdx: 9
   },
-  'delivery-flow': {
-    title:  '🧭 Delivery Flow',
-    sub:    'Where projects stall, what is stuck now, and consultant load — private view',
-    panel:  'panel-delivery-flow',
+  'regional-scorecard': {
+    title:  '🧭 Regional Scorecard',
+    sub:    'Projects, hours, utilization and deals side by side for each region — private view',
+    panel:  'panel-regional-scorecard',
     navIdx: 10
   },
   'team-availability': {
@@ -1350,10 +1294,10 @@ function insCheckAccess() {
       .withSuccessHandler(function(json) {
         var r; try { r = JSON.parse(json); } catch (e) { r = null; }
         INS_ALLOWED = !!(r && r.allowed);
-        // Delivery Flow tab — private, only for DF_ALLOWED emails.
-        DF_VISIBLE = DF_ALLOWED.indexOf(String((r && r.email) || '').toLowerCase()) > -1;
-        if (DF_VISIBLE) {
-          var dfNav = document.getElementById('nav-delivery-flow');
+        // Regional Scorecard tab — private, only for SC_ALLOWED emails.
+        SC_VISIBLE = SC_ALLOWED.indexOf(String((r && r.email) || '').toLowerCase()) > -1;
+        if (SC_VISIBLE) {
+          var dfNav = document.getElementById('nav-regional-scorecard');
           var dfSec = document.getElementById('nav-section-analytics');
           if (dfNav) dfNav.style.display = '';
           if (dfSec) dfSec.style.display = '';
@@ -1923,7 +1867,7 @@ function renderCurrentTab() {
   else if (CUR_TAB === 'backlog-analysis')  renderBacklogAnalysis();
   else if (CUR_TAB === 'attach-rates')      renderAttachRates();
   else if (CUR_TAB === 'insights')           renderInsights();
-  else if (CUR_TAB === 'delivery-flow')      renderDeliveryFlow();
+  else if (CUR_TAB === 'regional-scorecard') renderRegionalScorecard();
   else if (CUR_TAB === 'team-availability')  renderTeamAvailability();
 }
 
@@ -3859,297 +3803,209 @@ function drawUtTrend() {
 }
 
 // ════════════════════════════════════════════════════════════
-// TAB — DELIVERY FLOW (private: only DF_ALLOWED see the nav item)
+// TAB — REGIONAL SCORECARD (private: only SC_ALLOWED see the nav item)
 // ════════════════════════════════════════════════════════════
-var DF_ALLOWED    = ['anthony.gonzales@redis.com'];
-var DF_VISIBLE    = false;   // set by insCheckAccess() from the server-resolved email
-var DF_STALE_DAYS = 30;      // waiting longer than this = stale
-var DF_GEOS       = ['AMER', 'EMEA', 'APAC'];
-var DF_CLOSE_COLS = ['Opportunity: Close Date', 'Close Date', 'Opportunity Close Date', 'Opp Close Date'];
+var SC_ALLOWED = ['anthony.gonzales@redis.com'];
+var SC_VISIBLE = false;   // set by insCheckAccess() from the server-resolved email
+var SC_GEOS    = ['AMER', 'EMEA', 'APAC'];
+var SC_WEEKS   = 9;       // lookback (completed Sun–Sat weeks) for avg billable hours/week
+var SC_STAGES  = [        // same stages as the Active Projects tab (computeStage)
+  ['Awaiting Handoff',                 'c-yellow'],
+  ['Awaiting Kickoff',                 'c-orange'],
+  ['In Progress',                      'c-green'],
+  ['On Hold',                          'c-red'],
+  ['New Logo Awaiting Go Live',        'c-blue'],
+  ['New Logo Live / Awaiting Closure', 'c-purple']
+];
 
-function dfMedian(a) {
-  if (!a || !a.length) return null;
-  var s = a.slice().sort(function(x, y) { return x - y; }), m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+// Region → AMER / EMEA / APAC. _lbGeo plus the short codes PS User Records
+// uses (e.g. "NA").
+function scGeo(v) {
+  var g = _lbGeo(v);
+  if (g) return g;
+  var r = String(v || '').trim().toLowerCase();
+  if (r === 'na' || r === 'n.a.' || r === 'us' || r === 'usa' || r === 'noram') return 'AMER';
+  return null;
 }
-function dfDaysBetween(a, b) { return Math.round((b - a) / 86400000); }
-function dfNum(v) { var n = parseFloat(String(v == null ? '' : v).replace(/[$,\s]/g, '')); return isNaN(n) ? 0 : n; }
-function dfCol(s, names) { for (var i = 0; i < names.length; i++) { var k = hi(s, names[i]); if (k >= 0) return k; } return -1; }
-function dfDim(t) { return '<span style="color:var(--text-dim)">' + (t || '—') + '</span>'; }
-function dfLink(id, name) {
-  return id
-    ? '<a href="https://redis.lightning.force.com/lightning/r/project_cloud__Project__c/' + esc(id) + '/view" target="_blank" style="color:var(--red);text-decoration:none">' + esc(name) + '</a>'
-    : esc(name);
+function scNum(v) { var n = parseFloat(String(v == null ? '' : v).replace(/[$,\s]/g, '')); return isNaN(n) ? 0 : n; }
+function scBox(value, sub, cls, isTotal) {
+  return '<div class="sc-box' + (isTotal ? ' total' : '') + '"><div class="sc-val ' + (cls || '') + '">' + value + '</div>' +
+         (sub ? '<div class="sc-sub">' + sub + '</div>' : '') + '</div>';
 }
+function scUtilCls(p) { return p == null ? '' : p >= 80 ? 'c-green' : p >= 60 ? 'c-yellow' : 'c-red'; }
+function scFmtD(d) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 
-function renderDeliveryFlow() {
-  if (!DF_VISIBLE) return;
-  var ap = SHEETS.activeProjects;
-  if (!ap) {
-    document.getElementById('df-stage-body').innerHTML = '<tr><td colspan="5" class="empty">No Active Projects data loaded.</td></tr>';
-    return;
-  }
-  document.getElementById('df-stale-days').textContent = DF_STALE_DAYS;
+function renderRegionalScorecard() {
+  if (!SC_VISIBLE) return;
+  var gridEl = document.getElementById('sc-grid');
+  var noteEl = document.getElementById('sc-note');
+  if (!gridEl) return;
+
   var today = new Date(); today.setHours(0, 0, 0, 0);
-  var GEO_ALL = DF_GEOS.concat(['Global']);
+  var COLS = SC_GEOS.concat(['Total']);
+  function blank() { var o = {}; COLS.forEach(function(c) { o[c] = 0; }); return o; }
+  function add(o, geo, v) { if (geo) o[geo] += v; o['Total'] += v; }   // Total includes unmapped regions
 
-  // ═════ 1. WHERE PROJECTS GET STUCK ═════
-  // Combine Active Projects + Go Live sheet (completed projects), de-duped by
-  // Project ID (else Account + Project Name). Future-dated handoff / kickoff /
-  // actual go-live are treated as not yet happened.
-  var recs = {}, order = [];
-  function collect(s) {
-    if (!s) return;
-    var iID = hi(s,'Project: ID'), iPN = hi(s,'Project: Project Name'), iAcc = hi(s,'Account'), iReg = hi(s,'Region');
-    var iCl = dfCol(s, DF_CLOSE_COLS), iHO = hi(s,'Sales to PS Handoff Date'), iKO = hi(s,'Project Kickoff Date');
-    var iBG = hi(s,'Baseline Go Live Date'), iAG = hi(s,'Actual Go Live Date');
-    function dt(r, i, pastOnly) {
-      if (i < 0) return null;
-      var d = parseDate(r[i]);
-      if (!d) return null;
-      d.setHours(0, 0, 0, 0);
-      return (pastOnly && d > today) ? null : d;
-    }
-    s.data.forEach(function(r) {
-      var id  = iID >= 0 ? String(r[iID] || '').trim() : '';
-      var key = id ? 'id:' + id : 'nm:' + (iAcc >= 0 ? String(r[iAcc] || '') : '') + '|' + (iPN >= 0 ? String(r[iPN] || '') : '');
-      var rec = recs[key];
-      if (!rec) { rec = recs[key] = { region: null, close: null, ho: null, ko: null, bgl: null, agl: null }; order.push(key); }
-      if (!rec.region) rec.region = iReg >= 0 ? _lbGeo(r[iReg]) : null;
-      if (!rec.close) rec.close = dt(r, iCl, false);
-      if (!rec.ho)    rec.ho    = dt(r, iHO, true);
-      if (!rec.ko)    rec.ko    = dt(r, iKO, true);
-      if (!rec.bgl)   rec.bgl   = dt(r, iBG, false);
-      if (!rec.agl)   rec.agl   = dt(r, iAG, true);
+  var qLabel  = getFQLabel(today), qr = getFQRange(qLabel);
+  var qStart  = new Date(qr.start); qStart.setHours(0, 0, 0, 0);
+  var qEndCal = new Date(qr.end);   qEndCal.setHours(23, 59, 59, 999);
+  var lastSat = priorWeekSaturday(today);                     // last completed week end
+  var lastSatEnd = new Date(lastSat); lastSatEnd.setHours(23, 59, 59, 999);
+  var wkStart = new Date(lastSat); wkStart.setDate(wkStart.getDate() - (SC_WEEKS * 7 - 1)); wkStart.setHours(0, 0, 0, 0);
+
+  // ── 1. Active projects by stage ──────────────────────────────
+  var stageCnt = {}, openCnt = blank();
+  SC_STAGES.forEach(function(s) { stageCnt[s[0]] = blank(); });
+  stageCnt['Other'] = blank();
+  var ap = SHEETS.activeProjects;
+  if (ap) {
+    var iReg = hi(ap,'Region'), iPS = hiPSStatus(ap), iHO = hi(ap,'Sales to PS Handoff Date'), iKO = hi(ap,'Project Kickoff Date');
+    var iEn = hi(ap,'Entered Hours'), iAG = hi(ap,'Actual Go Live Date'), iRT = hi(ap,'Opportunity: Opportunity Record Type');
+    ap.data.forEach(function(r) {
+      var st = computeStage(r, iPS, iHO, iKO, iEn, iAG, iRT);
+      var g  = iReg >= 0 ? scGeo(r[iReg]) : null;
+      add(stageCnt[stageCnt[st] ? st : 'Other'], g, 1);
+      add(openCnt, g, 1);
     });
   }
-  collect(ap);
-  collect(SHEETS.goLive);
 
-  var M = {};
-  GEO_ALL.forEach(function(g) { M[g] = { ho: [], ko: [], build: [], slip: [] }; });
-  var badDates = 0;
-  order.forEach(function(k) {
-    var r = recs[k], gs = r.region ? [r.region, 'Global'] : ['Global'];
-    function push(field, v, allowNeg) {
-      if (!allowNeg && v < 0) { badDates++; return; }
-      gs.forEach(function(g) { M[g][field].push(v); });
-    }
-    if (r.close && r.ho) push('ho', dfDaysBetween(r.close, r.ho));
-    if (r.ho && r.ko)    push('ko', dfDaysBetween(r.ho, r.ko));
-    if (r.ko && r.agl)   push('build', dfDaysBetween(r.ko, r.agl));
-    if (r.bgl && r.agl)  push('slip', dfDaysBetween(r.bgl, r.agl), true);
-  });
-
-  function onTimePct(a) {
-    if (!a.length) return null;
-    return Math.round(a.filter(function(v) { return v <= 0; }).length / a.length * 100);
+  // ── 2 & 3. Hours-based rows (Hours Data is lazy-loaded) ──────
+  var hoursReady = !!SHEETS.hoursData && !!SHEETS.psUserRecords;
+  if (!SHEETS.hoursData && !HOURS_LOADING) {
+    HOURS_LOADING = true;
+    google.script.run
+      .withSuccessHandler(function(json) {
+        HOURS_LOADING = false;
+        var r; try { r = JSON.parse(json); } catch (e) { r = null; }
+        if (r && r.success && r.rows) { SHEETS.hoursData = mkSheet(r.rows); seedHoursFilters(true); }
+        if (CUR_TAB === 'regional-scorecard') renderRegionalScorecard();
+      })
+      .withFailureHandler(function() { HOURS_LOADING = false; })
+      .getHoursData();
   }
-  // rows: [label, sub, getter(geo) → value, fmt, higherIsWorse]
-  var stageRows = [
-    ['Handoff lag',   'Opp Close → Sales Handoff', 'ho'],
-    ['Kickoff lag',   'Sales Handoff → Kickoff',   'ko'],
-    ['Build time',    'Kickoff → Actual Go Live',  'build'],
-    ['Go-live slip',  'Actual vs Baseline Go Live (median days late)', 'slip']
-  ];
-  var html = stageRows.map(function(sr) {
-    var vals = DF_GEOS.map(function(g) { return dfMedian(M[g][sr[2]]); });
-    var worst = Math.max.apply(null, vals.filter(function(v) { return v != null; }).concat([-Infinity]));
-    return '<tr><td><b>' + sr[0] + '</b><div class="df-n" style="margin-left:0">' + sr[1] + '</div></td>' +
-      GEO_ALL.map(function(g, gi) {
-        var a = M[g][sr[2]], v = dfMedian(a);
-        if (v == null) return '<td>' + dfDim() + '</td>';
-        var slow = (gi < 3 && v === worst && vals.filter(function(x) { return x != null; }).length > 1);
-        var txt = (sr[2] === 'slip' && v > 0 ? '+' : '') + Math.round(v) + 'd';
-        return '<td><span class="' + (slow ? 'df-slow' : '') + '">' + txt + '</span><span class="df-n">n=' + a.length + '</span></td>';
-      }).join('') + '</tr>';
-  }).join('');
-  html += '<tr><td><b>On-time go-live</b><div class="df-n" style="margin-left:0">Actual on or before Baseline</div></td>' +
-    GEO_ALL.map(function(g) {
-      var p = onTimePct(M[g].slip);
-      if (p == null) return '<td>' + dfDim() + '</td>';
-      var col = p >= 80 ? 'var(--green)' : p >= 60 ? 'var(--yellow)' : 'var(--red)';
-      return '<td><span style="color:' + col + ';font-weight:700">' + p + '%</span><span class="df-n">n=' + M[g].slip.length + '</span></td>';
-    }).join('') + '</tr>';
-  document.getElementById('df-stage-body').innerHTML = html;
-  document.getElementById('df-stage-sub').textContent =
-    order.length + ' projects (open + go-live sheet)' +
-    (badDates ? ' · ' + badDates + ' date pairs skipped (end before start)' : '') +
-    ' · slowest region per stage in red';
+  var wk = { 'Consultant': { bill: blank(), pw: blank(), n: blank() },
+             'Engagement Manager': { bill: blank(), pw: blank(), n: blank() } };
+  var ut = { bill: blank(), work: blank(), n: blank() };
+  if (hoursReady) {
+    var us = utRosterSheet(), hs = SHEETS.hoursData;
+    var iUN = hi(us,'Full Name'); if (iUN < 0) iUN = hi(us,'Name');
+    var iUT = hi(us,'Title'), iUR = hi(us,'Region');
+    var iUS = hi(us,'User Start Day'); if (iUS < 0) iUS = hi(us,'Start Date');
+    var people = {};
+    us.data.forEach(function(r) {
+      var name = iUN >= 0 ? String(r[iUN] || '').trim() : ''; if (!name) return;
+      var title = iUT >= 0 ? String(r[iUT] || '').toLowerCase() : '';
+      var role  = (title.indexOf('consulting') > -1 || title.indexOf('training') > -1 || title.indexOf('delivery') > -1) ? 'Consultant' : 'Engagement Manager';
+      var sd = iUS >= 0 ? parseDate(r[iUS]) : null;
+      var rampEnd = sd ? new Date(sd.getTime() + 90 * 86400000) : null;
+      if (rampEnd) rampEnd.setHours(0, 0, 0, 0);
+      people[name.toLowerCase()] = { geo: iUR >= 0 ? scGeo(r[iUR]) : null, role: role, rampEnd: rampEnd, wkBill: 0, qBill: 0 };
+    });
+    var iHN = hi(hs,'Work: Owner Name'); if (iHN < 0) iHN = hi(hs,'Work Owner Name');
+    var iHD = hi(hs,'Date'), iHH = hi(hs,'Hours (Number)');
+    var iHP = hi(hs,'Project (Rollup)'), iHT = hi(hs,'Project Type'), iHA = hi(hs,'Administration Type');
+    hs.data.forEach(function(r) {
+      var p = people[String(iHN >= 0 ? r[iHN] : '').trim().toLowerCase()]; if (!p) return;
+      var d = iHD >= 0 ? parseDate(r[iHD]) : null; if (!d) return; d.setHours(0, 0, 0, 0);
+      if (d > lastSatEnd) return;
+      if (p.rampEnd && d < p.rampEnd) return;             // ramp period excluded (matches Utilization tab)
+      if (!psIsBillable(r, iHP, iHT, iHA)) return;
+      var h = iHH >= 0 ? scNum(r[iHH]) : 0;
+      if (d >= wkStart) p.wkBill += h;
+      if (d >= qStart)  p.qBill  += h;
+    });
+    Object.keys(people).forEach(function(k) {
+      var p = people[k];
+      var ws = (p.rampEnd && p.rampEnd > wkStart) ? p.rampEnd : wkStart;
+      var wdW = ws <= lastSat ? countWeekdays(ws, lastSat) : 0;
+      if (wdW > 0) { add(wk[p.role].bill, p.geo, p.wkBill); add(wk[p.role].pw, p.geo, wdW / 5); add(wk[p.role].n, p.geo, 1); }
+      var qs = (p.rampEnd && p.rampEnd > qStart) ? p.rampEnd : qStart;
+      var wdQ = qs <= lastSat ? countWeekdays(qs, lastSat) : 0;
+      if (wdQ > 0) { add(ut.bill, p.geo, p.qBill); add(ut.work, p.geo, wdQ * 8); add(ut.n, p.geo, 1); }
+    });
+  }
 
-  if (CHARTS.dfStage) { CHARTS.dfStage.destroy(); CHARTS.dfStage = null; }
-  var cv = document.getElementById('df-stage-chart');
-  if (cv) {
-    function med(g, f) { var v = dfMedian(M[g][f]); return v == null ? 0 : Math.round(v); }
-    CHARTS.dfStage = new Chart(cv, {
-      type: 'bar',
-      data: {
-        labels: GEO_ALL,
-        datasets: [
-          { label: 'Handoff lag', data: GEO_ALL.map(function(g) { return med(g, 'ho'); }),    backgroundColor: '#80DBFF' },
-          { label: 'Kickoff lag', data: GEO_ALL.map(function(g) { return med(g, 'ko'); }),    backgroundColor: '#FFA726' },
-          { label: 'Build time',  data: GEO_ALL.map(function(g) { return med(g, 'build'); }), backgroundColor: '#FF4438' }
-        ]
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { color: '#8A8AAA', font: { size: 10 }, boxWidth: 12 } },
-          tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + c.parsed.x + ' days (median)'; } } }
-        },
-        scales: {
-          x: { stacked: true, ticks: { color: '#8A8AAA', callback: function(v) { return v + 'd'; } }, grid: { color: '#252550' } },
-          y: { stacked: true, ticks: { color: '#8A8AAA' }, grid: { display: false } }
-        }
+  // ── 4 & 5. Deals (Bookings sheet) ────────────────────────────
+  var won  = { n: blank(), ps: blank(), noPs: blank() };
+  var pipe = { n: blank(), ps: blank(), commit: blank(), bc: blank() };
+  var bk = SHEETS.bookings, dealsReady = !!bk;
+  if (bk) {
+    var hLow = bk.hdrs.map(function(h) { return String(h).trim().toLowerCase(); });
+    function bc(c) { for (var i = 0; i < c.length; i++) { var k = hLow.indexOf(c[i].toLowerCase()); if (k > -1) return k; } return -1; }
+    var iBR = bc(['Region','Account Team Region','Territory','Sub-Region','Subregion','Geo','Area','Sales Region','Account Region']);
+    var iBP = bc(['PS Rollup (converted)','PS Rollup','PS Rollup $','PS Services Rollup','Rollup (converted)','Rollup','PS Amount','PS Services Amount']);
+    var iBC = bc(['Close Date','Closed Date','Expected Close Date']);
+    var iBF = bc(['VP Forecast','VP Forecast Category','Forecast Category']);
+    var iBS = bc(['Stage','Opportunity Stage','Deal Stage']);
+    bk.data.forEach(function(r) {
+      var cd = iBC >= 0 ? parseDate(r[iBC]) : null; if (!cd) return; cd.setHours(0, 0, 0, 0);
+      if (cd < qStart || cd > qEndCal) return;                       // current fiscal quarter only
+      var stg = iBS >= 0 ? String(r[iBS] || '').toLowerCase() : '';
+      var fc  = iBF >= 0 ? String(r[iBF] || '').trim().toLowerCase() : '';
+      var ps  = iBP >= 0 ? scNum(r[iBP]) : 0;
+      var g   = iBR >= 0 ? scGeo(r[iBR]) : null;
+      if (stg.indexOf('closed won') > -1) {
+        if (cd > today) return;
+        if (ps > 0) { add(won.n, g, 1); add(won.ps, g, ps); } else add(won.noPs, g, 1);
+      } else if (stg.indexOf('closed') > -1) {
+        return;                                                     // closed lost
+      } else if ((fc === 'commit' || fc === 'best case') && ps > 0) {
+        add(pipe.n, g, 1); add(pipe.ps, g, ps);
+        add(fc === 'commit' ? pipe.commit : pipe.bc, g, 1);
       }
     });
   }
 
-  // ═════ 2. STUCK WORK RIGHT NOW (open projects) ═════
-  var iAcc = hi(ap,'Account'), iPN = hi(ap,'Project: Project Name'), iID = hi(ap,'Project: ID'), iReg = hi(ap,'Region');
-  var iPS = hiPSStatus(ap), iHO = hi(ap,'Sales to PS Handoff Date'), iKO = hi(ap,'Project Kickoff Date');
-  var iEn = hi(ap,'Entered Hours'), iAG = hi(ap,'Actual Go Live Date'), iRT = hi(ap,'Opportunity: Opportunity Record Type');
-  var iCl = dfCol(ap, DF_CLOSE_COLS), iCons = hi(ap,'Primary Consultant'), iOwn = hi(ap,'Project: Owner Name');
-  var iHR = hi(ap,'Hours Remaining'), iRsn = hiHoldReason(ap);
-  var iARR = dfCol(ap, ['Opportunity: New ARR Amount (converted)', 'New ARR (converted)', 'New ARR']);
-
-  var W = {}, H = {}, NL = {}, reasons = {}, waiting = [], cons = {};
-  GEO_ALL.forEach(function(g) {
-    W[g]  = { 'Awaiting Handoff': [], 'Awaiting Kickoff': [] };
-    H[g]  = { open: 0, hold: 0 };
-    NL[g] = { n: 0, arr: 0, ages: [] };
-  });
-  var holdTotal = 0, staleTotal = 0;
-
-  ap.data.forEach(function(r) {
-    var stage = computeStage(r, iPS, iHO, iKO, iEn, iAG, iRT);
-    var geo = iReg >= 0 ? _lbGeo(r[iReg]) : null;
-    var gs  = geo ? [geo, 'Global'] : ['Global'];
-    gs.forEach(function(g) { H[g].open++; });
-
-    if (stage === 'Awaiting Handoff' || stage === 'Awaiting Kickoff') {
-      var since = parseDate(stage === 'Awaiting Handoff' ? (iCl >= 0 ? r[iCl] : '') : (iHO >= 0 ? r[iHO] : ''));
-      var age = since ? dfDaysBetween(since, today) : null;
-      if (age != null && age >= 0) {
-        gs.forEach(function(g) { W[g][stage].push(age); });
-        if (age > DF_STALE_DAYS) staleTotal++;
-      }
-      waiting.push({
-        acc: iAcc >= 0 ? String(r[iAcc] || '') : '', name: iPN >= 0 ? String(r[iPN] || '') : '',
-        id: iID >= 0 ? String(r[iID] || '').trim() : '', stage: stage, geo: geo || '—',
-        age: age, owner: iOwn >= 0 ? String(r[iOwn] || '') : '', cons: iCons >= 0 ? String(r[iCons] || '') : ''
-      });
-    }
-    if (stage === 'On Hold') {
-      holdTotal++;
-      gs.forEach(function(g) { H[g].hold++; });
-      var rsn = iRsn >= 0 ? String(r[iRsn] || '').trim() : '';
-      rsn = rsn || '(no reason given)';
-      reasons[rsn] = (reasons[rsn] || 0) + 1;
-    }
-    if (stage === 'New Logo Awaiting Go Live') {
-      var ko = parseDate(iKO >= 0 ? r[iKO] : '');
-      var kAge = ko ? dfDaysBetween(ko, today) : null;
-      gs.forEach(function(g) {
-        NL[g].n++;
-        if (iARR >= 0) NL[g].arr += dfNum(r[iARR]);
-        if (kAge != null && kAge >= 0) NL[g].ages.push(kAge);
-      });
-    }
-
-    // ── for section 3 ──
-    var cn = iCons >= 0 ? String(r[iCons] || '').trim() : '';
-    cn = cn || '(Unassigned)';
-    var c = cons[cn] || (cons[cn] = { n: 0, prog: 0, wait: 0, hold: 0, hrs: 0, geos: {} });
-    c.n++;
-    if (stage === 'On Hold') c.hold++;
-    else if (stage === 'Awaiting Handoff' || stage === 'Awaiting Kickoff') c.wait++;
-    else c.prog++;
-    if (iHR >= 0) c.hrs += Math.max(0, dfNum(r[iHR]));
-    if (geo) c.geos[geo] = 1;
-  });
-
-  // KPI strip
-  var g0 = H['Global'];
-  var holdPct = g0.open ? Math.round(g0.hold / g0.open * 100) : 0;
-  document.getElementById('df-kpis').innerHTML =
-    kpiCard('⏳', 'Waiting to start', W['Global']['Awaiting Handoff'].length + W['Global']['Awaiting Kickoff'].length, staleTotal + ' stale (> ' + DF_STALE_DAYS + 'd)', 'c-orange') +
-    kpiCard('⏸️', 'On Hold', g0.hold, holdPct + '% of ' + g0.open + ' open projects', 'c-red') +
-    kpiCard('🚀', 'New ARR awaiting go-live', iARR >= 0 ? fmtM(NL['Global'].arr) : 'n/a', NL['Global'].n + ' new-logo projects', 'c-blue');
-
-  // Waiting by region
-  function waitCells(a) {
-    if (!a.length) return '<td>0</td><td>' + dfDim() + '</td><td>' + dfDim() + '</td>';
-    var stale = a.filter(function(v) { return v > DF_STALE_DAYS; }).length;
-    var sp = Math.round(stale / a.length * 100);
-    return '<td><b>' + a.length + '</b></td><td>' + Math.round(dfMedian(a)) + 'd</td>' +
-      '<td><span style="color:' + (stale ? 'var(--red)' : 'var(--text-muted)') + ';font-weight:600">' + stale + '</span><span class="df-n">' + sp + '%</span></td>';
+  // ── Render grid ──────────────────────────────────────────────
+  var h = '<div class="sc-grid"><div></div>' + COLS.map(function(c) { return '<div class="sc-colhead">' + c + '</div>'; }).join('');
+  function section(t, sub) { h += '<div class="sc-section">' + t + (sub ? ' <span class="sc-sub">' + sub + '</span>' : '') + '</div>'; }
+  function row(label, sub, cellFn) {
+    h += '<div class="sc-rowhead"><div>' + label + '</div>' + (sub ? '<div class="sc-sub">' + sub + '</div>' : '') + '</div>';
+    COLS.forEach(function(c) { h += cellFn(c, c === 'Total'); });
   }
-  document.getElementById('df-wait-body').innerHTML = GEO_ALL.map(function(g) {
-    return '<tr' + (g === 'Global' ? ' style="background:var(--bg-card2)"' : '') + '><td><b>' + g + '</b></td>' +
-      waitCells(W[g]['Awaiting Handoff']) + waitCells(W[g]['Awaiting Kickoff']) + '</tr>';
-  }).join('');
+  var loading = function(c, t) { return scBox('<span class="sc-sub">Loading…</span>', '', '', t); };
 
-  // Longest waiting
-  waiting.sort(function(a, b) { return (b.age == null ? -1 : b.age) - (a.age == null ? -1 : a.age); });
-  document.getElementById('df-oldest-body').innerHTML = waiting.length
-    ? waiting.slice(0, 10).map(function(w) {
-        var ageTxt = w.age == null ? dfDim('no date') : '<span style="font-weight:700;color:' + (w.age > DF_STALE_DAYS ? 'var(--red)' : 'var(--text)') + '">' + w.age + 'd</span>';
-        return '<tr><td>' + esc(w.acc) + '</td><td>' + dfLink(w.id, w.name) + '</td><td>' + stageBadge(w.stage) + '</td><td>' + esc(w.geo) +
-          '</td><td>' + ageTxt + '</td><td>' + esc(w.owner) + '</td><td>' + (w.cons ? esc(w.cons) : dfDim('unassigned')) + '</td></tr>';
-      }).join('')
-    : '<tr><td colspan="7" class="empty">Nothing waiting to start 🎉</td></tr>';
-
-  // On Hold by region + reasons
-  document.getElementById('df-hold-body').innerHTML = GEO_ALL.map(function(g) {
-    var p = H[g].open ? Math.round(H[g].hold / H[g].open * 100) : 0;
-    return '<tr' + (g === 'Global' ? ' style="background:var(--bg-card2)"' : '') + '><td><b>' + g + '</b></td><td>' + H[g].open +
-      '</td><td>' + H[g].hold + '</td><td><span style="font-weight:700;color:' + (p >= 15 ? 'var(--red)' : p >= 8 ? 'var(--yellow)' : 'var(--text)') + '">' + p + '%</span></td></tr>';
-  }).join('');
-  var rKeys = Object.keys(reasons).sort(function(a, b) { return reasons[b] - reasons[a]; });
-  document.getElementById('df-reason-body').innerHTML = rKeys.length
-    ? rKeys.map(function(k) {
-        var p = Math.round(reasons[k] / holdTotal * 100);
-        return '<tr><td style="white-space:normal">' + esc(k) + '</td><td><b>' + reasons[k] + '</b></td><td><span class="df-bar" style="width:' + Math.max(4, p) + 'px"></span>' + p + '%</td></tr>';
-      }).join('')
-    : '<tr><td colspan="3" class="empty">No projects on hold.</td></tr>';
-
-  // New logo awaiting go-live
-  document.getElementById('df-nl-sub').textContent = iARR >= 0 ? 'sum of New ARR on open new-logo projects not yet live' : 'New ARR column not found on Active Projects — counts only';
-  document.getElementById('df-nl-body').innerHTML = GEO_ALL.map(function(g) {
-    var n = NL[g];
-    return '<tr' + (g === 'Global' ? ' style="background:var(--bg-card2)"' : '') + '><td><b>' + g + '</b></td><td>' + n.n + '</td><td>' +
-      (iARR >= 0 ? '<b>' + fmtM(n.arr) + '</b>' : dfDim('n/a')) + '</td><td>' +
-      (n.ages.length ? Math.round(dfMedian(n.ages)) + 'd<span class="df-n">n=' + n.ages.length + '</span>' : dfDim()) + '</td></tr>';
-  }).join('');
-
-  // ═════ 3. OPEN PROJECTS PER CONSULTANT ═════
-  var cKeys = Object.keys(cons).sort(function(a, b) {
-    if (a === '(Unassigned)') return 1;     // unassigned always last
-    if (b === '(Unassigned)') return -1;
-    return cons[b].n - cons[a].n || a.localeCompare(b);
+  section('Active projects by stage', 'same stages as the Active Projects tab');
+  row('Total open', '', function(c, t) { return scBox(openCnt[c], '', '', t); });
+  SC_STAGES.forEach(function(s) {
+    row(s[0], '', function(c, t) {
+      var v = stageCnt[s[0]][c];
+      return scBox(v, openCnt[c] ? Math.round(v / openCnt[c] * 100) + '% of open' : '', v ? s[1] : '', t);
+    });
   });
-  var assigned = cKeys.filter(function(k) { return k !== '(Unassigned)'; });
-  var assignedTotal = assigned.reduce(function(s, k) { return s + cons[k].n; }, 0);
-  var avg = assigned.length ? assignedTotal / assigned.length : 0;
-  var top5 = assigned.slice(0, 5).reduce(function(s, k) { return s + cons[k].n; }, 0);
-  var maxN = cKeys.length ? Math.max.apply(null, cKeys.map(function(k) { return cons[k].n; })) : 1;
-  var unassigned = cons['(Unassigned)'] ? cons['(Unassigned)'].n : 0;
-  document.getElementById('df-cons-sub').textContent =
-    assigned.length + ' consultants · avg ' + avg.toFixed(1) + ' open projects each' +
-    (assigned.length > 5 && assignedTotal ? ' · top 5 hold ' + Math.round(top5 / assignedTotal * 100) + '% of assigned projects' : '') +
-    (unassigned ? ' · ' + unassigned + ' unassigned' : '') + ' · ≥1.5× avg in yellow';
-  document.getElementById('df-cons-body').innerHTML = cKeys.length
-    ? cKeys.map(function(k) {
-        var c = cons[k], heavy = k !== '(Unassigned)' && avg && c.n >= avg * 1.5;
-        var w = Math.round(c.n / maxN * 120);
-        return '<tr><td style="font-weight:600' + (k === '(Unassigned)' ? ';color:var(--text-muted)' : '') + '">' + esc(k) + '</td>' +
-          '<td><span class="df-bar" style="width:' + Math.max(4, w) + 'px;' + (heavy ? 'background:var(--yellow)' : '') + '"></span>' +
-            '<b style="' + (heavy ? 'color:var(--yellow)' : '') + '">' + c.n + '</b></td>' +
-          '<td>' + c.prog + '</td><td>' + (c.wait || dfDim('0')) + '</td><td>' + (c.hold ? '<span style="color:var(--red)">' + c.hold + '</span>' : dfDim('0')) + '</td>' +
-          '<td>' + Math.round(c.hrs).toLocaleString() + '</td><td>' + Object.keys(c.geos).sort().join(', ') + '</td></tr>';
-      }).join('')
-    : '<tr><td colspan="7" class="empty">No open projects.</td></tr>';
+  if (stageCnt['Other']['Total']) row('Other', 'no matching stage', function(c, t) { return scBox(stageCnt['Other'][c], '', '', t); });
+
+  section('Avg billable hours per week', 'last ' + SC_WEEKS + ' completed weeks · ' + scFmtD(wkStart) + ' – ' + scFmtD(lastSat) + ' · per person');
+  ['Consultant', 'Engagement Manager'].forEach(function(role) {
+    row(role === 'Consultant' ? 'Consultants' : 'Engagement Managers', '', !hoursReady ? loading : function(c, t) {
+      var b = wk[role].bill[c], pw = wk[role].pw[c], n = wk[role].n[c];
+      if (!pw) return scBox('—', 'no one past 90-day ramp', '', t);
+      var v = b / pw;
+      return scBox(v.toFixed(1), 'hrs/wk · ' + n + ' ' + (n === 1 ? 'person' : 'people'), '', t);
+    });
+  });
+
+  section('Billable utilization', qLabel + ' to date · ' + scFmtD(qStart) + ' – ' + scFmtD(lastSat));
+  row('Billable util %', 'billable hrs ÷ working hrs', !hoursReady ? loading : function(c, t) {
+    if (!ut.work[c]) return scBox('—', 'no one past 90-day ramp', '', t);
+    var p = Math.round(ut.bill[c] / ut.work[c] * 100);
+    return scBox(p + '%', ut.n[c] + (ut.n[c] === 1 ? ' person · ' : ' people · ') + Math.round(ut.bill[c]).toLocaleString() + ' / ' + Math.round(ut.work[c]).toLocaleString() + ' hrs', scUtilCls(p), t);
+  });
+
+  section('Deals', qLabel + ' · deals with PS (PS Rollup &gt; 0)');
+  row('Closed won QTD', 'count · PS rollup $', !dealsReady ? function(c, t) { return scBox('—', 'no Bookings data', '', t); } : function(c, t) {
+    var sub = '<b class="sc-money">' + fmtM(won.ps[c]) + '</b> PS rollup' + (won.noPs[c] ? '<br>+' + won.noPs[c] + ' closed with no PS' : '');
+    return scBox(won.n[c], sub, won.n[c] ? 'c-green' : '', t);
+  });
+  row('Commit / Best Case', 'open deals closing this qtr', !dealsReady ? function(c, t) { return scBox('—', 'no Bookings data', '', t); } : function(c, t) {
+    var sub = '<b class="sc-money">' + fmtM(pipe.ps[c]) + '</b> PS rollup<br>' + pipe.commit[c] + ' commit · ' + pipe.bc[c] + ' best case';
+    return scBox(pipe.n[c], sub, pipe.n[c] ? 'c-blue' : '', t);
+  });
+  h += '</div>';
+  gridEl.innerHTML = h;
+
+  if (noteEl) noteEl.innerHTML = 'Private view — only visible to you. AMER = North America + LATAM. ' +
+    '<b>Total</b> also includes anything whose region couldn’t be mapped. Hours and utilization exclude each person’s first 90 days, same as the Utilization tab.';
 }
 
 // ════════════════════════════════════════════════════════════
