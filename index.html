@@ -157,7 +157,11 @@ select:focus { outline: none; border-color: var(--red); }
 #ut-trend-canvas { max-height:none !important; }
 .sc-note { font-size:11px; color:var(--text-muted); margin-bottom:12px; }
 .sc-scroll { overflow-x:auto; padding-bottom:4px; }
-.sc-grid { display:grid; grid-template-columns:minmax(180px,1.2fr) repeat(4, minmax(130px,1fr)); gap:10px; min-width:780px; align-items:stretch; }
+.sc-grid { display:grid; grid-template-columns:minmax(180px,1.2fr) repeat(4, minmax(130px,1fr)); gap:10px; min-width:900px; align-items:stretch; }
+.sc-subgrid { grid-column:2 / -1; display:grid; gap:10px; align-items:stretch; }
+.sc-subgrid .sc-colhead { font-size:10px; letter-spacing:0.04em; line-height:1.3; }
+.sc-subgrid .sc-box { padding:10px 6px; min-width:0; }
+.sc-subgrid .sc-val { font-size:20px; }
 .sc-colhead { font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; text-align:center; align-self:end; padding-bottom:2px; }
 .sc-section { grid-column:1 / -1; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin-top:14px; padding-bottom:5px; border-bottom:1px solid var(--border); }
 .sc-section .sc-sub { text-transform:none; letter-spacing:0; margin-left:6px; }
@@ -4079,7 +4083,8 @@ function renderRegionalScorecard() {
   });
 
   // ── Render grid ──────────────────────────────────────────────
-  var h = '<div class="sc-grid"><div></div>' + COLS.map(function(c) { return '<div class="sc-colhead">' + c + '</div>'; }).join('');
+  var h = '<div class="sc-grid">';
+  function colHeads() { h += '<div></div>' + COLS.map(function(c) { return '<div class="sc-colhead">' + c + '</div>'; }).join(''); }
   function section(t, sub) { h += '<div class="sc-section">' + t + (sub ? ' <span class="sc-sub">' + sub + '</span>' : '') + '</div>'; }
   function row(label, sub, keyPrefix, cellFn) {
     h += '<div class="sc-rowhead"><div>' + label + '</div>' + (sub ? '<div class="sc-sub">' + sub + '</div>' : '') + '</div>';
@@ -4088,17 +4093,26 @@ function renderRegionalScorecard() {
   var loading = function(c, t) { return scBox('<span class="sc-sub">Loading…</span>', '', '', t); };
   function nPeople(n) { return n + (n === 1 ? ' person' : ' people'); }
 
-  section('Active projects by stage', 'same stages as the Active Projects tab · click any box for the list');
-  row('Total open', '', 'open', function(c, t, k) { return scBox(openL[c].length, '', '', t, k); });
-  SC_STAGES.forEach(function(s, si) {
-    row(s[0], '', 'stage' + si, function(c, t, k) {
-      var v = stageL[s[0]][c].length, o = openL[c].length;
-      return scBox(v, o ? Math.round(v / o * 100) + '% of open' : '', v ? s[1] : '', t, k);
+  // Projects section is transposed: regions as rows, stages as columns. The stage
+  // cards sit in a sub-grid spanning the 4 region columns so the label column still lines up.
+  section('Active projects by stage', 'regions down the side, stages across the top · same stages as the Active Projects tab · click any box for the list');
+  var PCOLS = [['Total open', 'open', '']].concat(SC_STAGES.map(function(s, si) { return [s[0], 'stage' + si, s[1]]; }));
+  if (stageL['Other']['Total'].length) PCOLS.push(['Other', 'stage' + SC_STAGES.length, '']);
+  var subOpen = '<div class="sc-subgrid" style="grid-template-columns:repeat(' + PCOLS.length + ', minmax(0,1fr))">';
+  h += '<div></div>' + subOpen + PCOLS.map(function(p) { return '<div class="sc-colhead">' + p[0] + '</div>'; }).join('') + '</div>';
+  COLS.forEach(function(c) {
+    var t = c === 'Total', o = openL[c].length;
+    h += '<div class="sc-rowhead"><div>' + (t ? 'Total' : c) + '</div></div>' + subOpen;
+    PCOLS.forEach(function(p, pi) {
+      var k = p[1] + '|' + c;
+      if (pi === 0) { h += scBox(o, '', '', true, k); return; }
+      var v = (stageL[p[0]] || {})[c] ? stageL[p[0]][c].length : 0;
+      h += scBox(v, o && v ? Math.round(v / o * 100) + '% of open' : '', v ? p[2] : '', t, k);
     });
+    h += '</div>';
   });
-  if (stageL['Other']['Total'].length) row('Other', 'no matching stage', 'stage' + SC_STAGES.length, function(c, t, k) {
-    return scBox(stageL['Other'][c].length, '', '', t, k);
-  });
+
+  colHeads();   // region headers again — the sections below are regions across the top
 
   section('Avg billable hours per week', 'last ' + SC_WEEKS + ' completed weeks · ' + scFmtD(wkStart) + ' – ' + scFmtD(lastSat) + ' · per person');
   ['Consultant', 'Engagement Manager'].forEach(function(role, ri) {
