@@ -158,6 +158,7 @@ select:focus { outline: none; border-color: var(--red); }
 .sc-note { font-size:11px; color:var(--text-muted); margin-bottom:12px; }
 .sc-scroll { overflow-x:auto; padding-bottom:4px; }
 .sc-grid { display:grid; grid-template-columns:minmax(180px,1.2fr) repeat(4, minmax(130px,1fr)); gap:10px; min-width:900px; align-items:stretch; }
+.sc-colhead.sc-colhead-lg { font-size:15px; color:var(--text); letter-spacing:0.1em; margin-top:26px; padding-bottom:0; }
 .sc-subgrid { grid-column:2 / -1; display:grid; gap:10px; align-items:stretch; }
 .sc-subgrid .sc-colhead { font-size:10px; letter-spacing:0.04em; line-height:1.3; }
 .sc-subgrid .sc-box { padding:10px 6px; min-width:0; }
@@ -4084,7 +4085,7 @@ function renderRegionalScorecard() {
 
   // ── Render grid ──────────────────────────────────────────────
   var h = '<div class="sc-grid">';
-  function colHeads() { h += '<div></div>' + COLS.map(function(c) { return '<div class="sc-colhead">' + c + '</div>'; }).join(''); }
+  function colHeads() { h += '<div></div>' + COLS.map(function(c) { return '<div class="sc-colhead sc-colhead-lg">' + c + '</div>'; }).join(''); }
   function section(t, sub) { h += '<div class="sc-section">' + t + (sub ? ' <span class="sc-sub">' + sub + '</span>' : '') + '</div>'; }
   function row(label, sub, keyPrefix, cellFn) {
     h += '<div class="sc-rowhead"><div>' + label + '</div>' + (sub ? '<div class="sc-sub">' + sub + '</div>' : '') + '</div>';
