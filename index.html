@@ -325,6 +325,9 @@ th { position: relative; }
     </div>
     <nav class="nav">
       <div class="nav-section">Dashboards</div>
+      <div class="nav-item" onclick="switchTab('regional-scorecard')" id="nav-regional-scorecard">
+        <span class="nav-icon">🧭</span> Regional Scorecard
+      </div>
       <div class="nav-item active" onclick="switchTab('active-projects')">
         <span class="nav-icon">📋</span> Active Projects
       </div>
@@ -356,10 +359,6 @@ th { position: relative; }
       <div class="nav-section" id="nav-section-assistant" style="display:none">Assistant</div>
       <div class="nav-item" onclick="switchTab('insights')" id="nav-insights" style="display:none">
         <span class="nav-icon">✨</span> Insights
-      </div>
-      <div class="nav-section" id="nav-section-analytics">Analytics</div>
-      <div class="nav-item" onclick="switchTab('regional-scorecard')" id="nav-regional-scorecard">
-        <span class="nav-icon">🧭</span> Regional Scorecard
       </div>
     </nav>
   </aside>
@@ -1132,67 +1131,67 @@ var TAB_META = {
     title:  'Active Projects',
     sub:    'Open projects and performance against contract',
     panel:  'panel-active-projects',
-    navIdx: 0
+    navIdx: 1
   },
   'go-lives': {
     title:  'Go Lives',
     sub:    'New logo projects — grouped by Fiscal Period',
     panel:  'panel-go-lives',
-    navIdx: 1
+    navIdx: 2
   },
   'annual-plan': {
     title:  'Annual Plan & Resident Engineer Projects',
     sub:    'Open projects and performance against contract entitlement',
     panel:  'panel-annual-plan',
-    navIdx: 2
+    navIdx: 3
   },
   'cloud-usage': {
     title:  'Cloud Usage Stats',
     sub:    'Projects grouped by Cloud Usage Bucket and Region',
     panel:  'panel-cloud-usage',
-    navIdx: 3
+    navIdx: 4
   },
   'utilization': {
     title:  'Utilization',
     sub:    'Resource billable and total utilization from hours data',
     panel:  'panel-utilization',
-    navIdx: 4
+    navIdx: 5
   },
   'bookings-forecast': {
     title:  'Bookings Forecast',
     sub:    'Quarterly bookings targets, actuals, and attainment by region',
     panel:  'panel-bookings-forecast',
-    navIdx: 5
+    navIdx: 6
   },
   'backlog-analysis': {
     title:  'Backlog Analysis',
     sub:    'Quarterly backlog projections by region',
     panel:  'panel-backlog-analysis',
-    navIdx: 6
+    navIdx: 7
   },
   'attach-rates': {
     title:  'Attach Rates',
     sub:    'PS attach rate analysis',
     panel:  'panel-attach-rates',
-    navIdx: 7
+    navIdx: 8
   },
   'insights': {
     title:  '✨ Insights',
     sub:    'Ask questions about your PS data — powered by Claude',
     panel:  'panel-insights',
-    navIdx: 9
+    navIdx: 10
   },
   'regional-scorecard': {
     title:  '🧭 Regional Scorecard',
     sub:    'Projects, hours, utilization and deals side by side for each region — click any box for details',
     panel:  'panel-regional-scorecard',
-    navIdx: 10
+    navIdx: 0
   },
   'team-availability': {
     title:  'Team Availability',
     sub:    'Calendar-based capacity and utilization — current & next week',
     panel:  'panel-team-availability',
-    navIdx: 8
+    navIdx: 9
   }
 };
 
