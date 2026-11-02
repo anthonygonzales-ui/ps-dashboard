@@ -5130,25 +5130,31 @@ function renderBacklogAnalysis() {
     }
   }
 
-  // Key helpers
-  function baKey(q, region, field) { return 'ba_' + fy + '_' + q + '_' + region + '_' + field; }
-  function getBaNum(q, region, field) { return baParseNum(BACKLOG[baKey(q, region, field)]); }
+  // Key helpers (fyX = the fiscal year a value belongs to)
+  function baKeyFY(fyX, q, region, field) { return 'ba_' + fyX + '_' + q + '_' + region + '_' + field; }
+  function baKey(q, region, field) { return baKeyFY(fy, q, region, field); }
+  function getBaNum(fyX, q, region, field) { return baParseNum(BACKLOG[baKeyFY(fyX, q, region, field)]); }
 
   // Bookings Forecast actuals come from the Bookings Forecast tab
-  function getBfActuals(q, region) {
-    return bfParseNum(BOOKINGS[fy + '_' + q + '_' + region + '_actuals']);
+  function getBfActuals(fyX, q, region) {
+    return bfParseNum(BOOKINGS[fyX + '_' + q + '_' + region + '_actuals']);
   }
 
-  // ── Pre-compute per-quarter per-region values (chain starting backlog) ──
-  var computed = {};   // [q][region] → object with all values
-  var prevNewBacklog = { AMER: null, EMEA: null, APAC: null };
+  // ── Run the model for one fiscal year (chains starting backlog quarter to quarter) ──
+  // carryIn = ending backlog handed over from the prior FY (null → start at 0).
+  // Returns { computed: [q][region] → values, carry: backlog handed to the next quarter }.
+  function runFY(fyX, qs, carryIn) {
+  var computed = {};
+  var prevNewBacklog = carryIn
+    ? { AMER: carryIn.AMER, EMEA: carryIn.EMEA, APAC: carryIn.APAC }
+    : { AMER: null, EMEA: null, APAC: null };
 
-  quarters.forEach(function(q) {
+  qs.forEach(function(q) {
     computed[q] = {};
     regions.forEach(function(region) {
       // Starting Backlog
       var startBacklog;
-      if (q === curQ && fy === curFY) {
+      if (q === curQ && fyX === curFY) {
         // Current quarter: live from active projects
         startBacklog = liveHrs[region];
       } else if (prevNewBacklog[region] !== null) {
@@ -5159,7 +5165,7 @@ function renderBacklogAnalysis() {
       }
 
       // Bookings Forecast ($) from Bookings Forecast tab
-      var bfActuals = getBfActuals(q, region) || 0;
+      var bfActuals = getBfActuals(fyX, q, region) || 0;
 
       // Estimated List Value
       var multiplier = BA_MULTIPLIERS[region] || 1;
@@ -5175,8 +5181,8 @@ function renderBacklogAnalysis() {
       var newBacklog = startBacklog + incrHrs;
 
       // Headcount (manual)
-      var numCons = getBaNum(q, region, 'consultants') || 0;
-      var numEM   = getBaNum(q, region, 'em') || 0;
+      var numCons = getBaNum(fyX, q, region, 'consultants') || 0;
+      var numEM   = getBaNum(fyX, q, region, 'em') || 0;
 
       // Backlog split
       var conBacklog = newBacklog * BA_CONSULTANT_PCT;
@@ -5190,7 +5196,7 @@ function renderBacklogAnalysis() {
       // For the current quarter, scale by the fraction of working days remaining.
       // For future quarters, effective = full (capFactor = 1).
       var capFactor = 1;
-      if (q === curQ && fy === curFY) {
+      if (q === curQ && fyX === curFY) {
         var qRange_  = getFQRange(curQLabel);
         var totalWD  = countWeekdays(qRange_.start, qRange_.end);
         var remainWD = countWeekdays(today, qRange_.end);
@@ -5227,6 +5233,17 @@ function renderBacklogAnalysis() {
       prevNewBacklog[region] = Math.max(0, d.newBacklog - burnDown);
     });
   });
+  return { computed: computed, carry: prevNewBacklog };
+  }
+
+  // Future FYs pick up where the model leaves off: run the current FY from the
+  // current quarter, then every FY in between, and hand the ending backlog to Q1.
+  var carryIn = null;
+  if (fy > curFY) {
+    carryIn = runFY(curFY, allQuarters.slice(allQuarters.indexOf(curQ)), null).carry;
+    for (var yr = curFY + 1; yr < fy; yr++) carryIn = runFY(yr, allQuarters, carryIn).carry;
+  }
+  var computed = runFY(fy, quarters, carryIn).computed;
 
   // ── Input cell style ──
   var BA_IN_STYLE = [
