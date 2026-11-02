@@ -451,7 +451,7 @@ th { position: relative; }
           <div class="filter-group"><label>Region</label>
             <select id="gl-region" onchange="renderGoLives()"><option>All</option></select></div>
           <div class="filter-group"><label>Fiscal Period</label>
-            <select id="gl-fp" onchange="renderGoLives()"><option>All</option></select></div>
+            <div class="ms-dropdown"><button class="ms-btn" onclick="toggleMs('gl-fp',event)"><span class="ms-label">All</span></button><div class="ms-panel" id="msp-gl-fp"></div></div></div>
           <div class="filter-group"><label>New ARR Bucket</label>
             <select id="gl-arr-bucket" onchange="renderGoLives()"><option>All</option></select></div>
           <div class="filter-group"><label>Product Type</label>
@@ -1462,7 +1462,9 @@ function seedFilters() {
     fillSel('gl-account', uniq(s.data, hi(s,'Account')));
     fillSel('gl-owner',   uniq(s.data, hi(s,'Project: Owner Name')));
     fillSel('gl-region',  uniq(s.data, hi(s,'Region')));
-    fillSel('gl-fp',      sortFiscalPeriods(uniq(s.data, hi(s,'Opportunity: Fiscal Period'))));
+    var prevFP = gmf('gl-fp');
+    fillMsGL('gl-fp',     sortFiscalPeriods(uniq(s.data, hi(s,'Opportunity: Fiscal Period'))));
+    setMsMulti('gl-fp', prevFP.filter(function(v) { return msAllValues('gl-fp').indexOf(v) > -1; }));
     // ARR buckets — fixed tiers
     var arrBuckets = ['<50K','50K - 100K','100K - 250K','250K - 500K','500K+'];
     fillSel('gl-arr-bucket', arrBuckets);
@@ -1707,6 +1709,18 @@ function fillMsTrendR(key, vals) {
     }).join('');
 }
 
+// Go Lives tab multi-selects → re-render the Go Lives tab.
+function onMsAllGL(key, cb)  { _msToggleAll(key, cb);  renderGoLives(); }
+function onMsItemGL(key, cb) { _msToggleItem(key, cb); renderGoLives(); }
+function fillMsGL(key, vals) {
+  var panel = document.getElementById('msp-' + key);
+  if (!panel) return;
+  panel.innerHTML = '<label class="ms-item"><input type="checkbox" value="__all__" checked onchange="onMsAllGL(\'' + key + '\',this)"> All</label>' +
+    vals.map(function (v) {
+      return '<label class="ms-item"><input type="checkbox" value="' + esc(v) + '" onchange="onMsItemGL(\'' + key + '\',this)"> ' + esc(v) + '</label>';
+    }).join('');
+}
+
 // Every option value in a multi-select panel (ignores the "All" checkbox).
 function msAllValues(key) {
   var panel = document.getElementById('msp-' + key);
@@ -1843,6 +1857,7 @@ function clearF(prefix) {
   if (prefix === 'ar') {
     ['ar-region','ar-subregion','ar-rectype','ar-arrbucket'].forEach(clearMs);
   }
+  if (prefix === 'gl') clearMs('gl-fp');
   if (prefix === 'ut') {
     // region/manager/role/ramp are <select>s already reset to All above.
     // Reset the multi-selects: month/week → All, quarter → current quarter (default).
@@ -2136,7 +2151,7 @@ function renderGoLives() {
   var fAccount   = gf('gl-account');
   var fOwner     = gf('gl-owner');
   var fRegion    = gf('gl-region');
-  var fFP        = gf('gl-fp');
+  var fFP        = gmf('gl-fp');   // [] = All
   var fArrBucket = gf('gl-arr-bucket');
   var fProdType  = gf('gl-prodtype');
   var iGlPT = hi(s,'Opportunity: Product Type'); if (iGlPT < 0) iGlPT = hi(s,'Opportunity: Product Family'); if (iGlPT < 0) iGlPT = hi(s,'Product Type');
@@ -2145,7 +2160,7 @@ function renderGoLives() {
     if (fAccount   !== 'All' && String(r[iAccount] || '') !== fAccount)    return false;
     if (fOwner     !== 'All' && String(r[iOwner]   || '') !== fOwner)      return false;
     if (fRegion    !== 'All' && String(r[iRegion]  || '') !== fRegion)     return false;
-    if (fFP        !== 'All' && String(r[iFP]      || '') !== fFP)         return false;
+    if (fFP.length && fFP.indexOf(String(r[iFP] || '')) < 0)               return false;
     if (fArrBucket !== 'All' && arrBucket(r[iARR])        !== fArrBucket) return false;
     if (fProdType  !== 'All' && String((iGlPT >= 0 ? r[iGlPT] : '') || '') !== fProdType) return false;
     return true;
