@@ -200,6 +200,10 @@ tr.ut-detail-row > td { padding:0; border-bottom:1px solid var(--border); }
 .tbl-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 10px; border-bottom: 1px solid var(--border); }
 .tbl-head-title { font-size: 13px; font-weight: 600; }
 .tbl-head-sub { font-size: 11px; color: var(--text-muted); }
+.ba-assump { padding:14px 18px 16px; border-top:1px solid var(--border); font-size:11.5px; color:var(--text-muted); }
+.ba-assump-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--text); margin-bottom:8px; }
+.ba-assump ul { margin:0; padding-left:18px; display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); column-gap:28px; row-gap:4px; }
+.ba-assump b { color:var(--text); font-weight:600; }
 .tbl-scroll { overflow-x: auto; }
 .col-sticky { position: sticky; left: 0; z-index: 2; background: var(--bg-card); }
 thead .col-sticky { z-index: 3; }
@@ -948,6 +952,7 @@ th { position: relative; }
               <tbody id="ba-body"></tbody>
             </table>
           </div>
+          <div class="ba-assump" id="ba-assumptions"></div>
         </div>
       </div>
 
@@ -5032,6 +5037,11 @@ var BA_HOURLY_RATE = 275;
 // Backlog split: consultant vs EM
 var BA_CONSULTANT_PCT = 0.75;
 var BA_EM_PCT         = 0.25;
+// Share of estimated list value delivered in-year
+var BA_IN_YEAR_PCT    = 0.85;
+// Planning assumptions shown under the table (not used in the math)
+var BA_AVG_DISCOUNT   = { AMER: 0.15, EMEA: 0.28, APAC: 0.40 };
+var BA_ARR_GROWTH     = 0.25;
 
 // Format whole dollars: 1500000 → "$1,500,000"
 function baFmtD(n) {
@@ -5200,7 +5210,7 @@ function renderBacklogAnalysis() {
       var estListVal = bfActuals * multiplier;
 
       // In Year Bookings
-      var inYearBook = estListVal * 0.85;
+      var inYearBook = estListVal * BA_IN_YEAR_PCT;
 
       // Incremental Hours = In Year Bookings / $275 per hour
       var incrHrs = inYearBook / BA_HOURLY_RATE;
@@ -5403,6 +5413,27 @@ function renderBacklogAnalysis() {
 
   var tbody = document.getElementById('ba-body');
   if (tbody) tbody.innerHTML = rows;
+
+  // ── Assumptions (built from the constants above so they always match the math) ──
+  var asEl = document.getElementById('ba-assumptions');
+  if (asEl) {
+    var pctS = function(v) { return Math.round(v * 100) + '%'; };
+    var byReg = function(o, fmt) { return regions.map(function(r) { return r + ' <b>' + fmt(o[r]) + '</b>'; }).join(' · '); };
+    asEl.innerHTML = '<div class="ba-assump-title">Assumptions</div><ul>' + [
+      'Utilization target <b>' + pctS(BA_UTIL_TARGET) + '</b> → capacity <b>' + baFmtH(BA_HRS_PER_PERSON) + ' billable hrs/person/yr</b> (2,080 hrs × ' + pctS(BA_UTIL_TARGET) + ')',
+      'ARR growth rate <b>' + pctS(BA_ARR_GROWTH) + '</b>',
+      'Avg discount: ' + byReg(BA_AVG_DISCOUNT, pctS),
+      'Est. list value multiplier (bookings × multiplier): ' + byReg(BA_MULTIPLIERS, function(v) { return v.toFixed(2) + '×'; }),
+      'In-year bookings = <b>' + pctS(BA_IN_YEAR_PCT) + '</b> of est. list value',
+      'Incremental hours = in-year bookings ÷ <b>$' + BA_HOURLY_RATE + '/hr</b>',
+      'Backlog split: <b>' + pctS(BA_CONSULTANT_PCT) + '</b> consultants · <b>' + pctS(BA_EM_PCT) + '</b> EMs',
+      'Quarterly burn-down = annual capacity ÷ 4 (current quarter prorated to working days left)',
+      'Current-quarter starting backlog = hours remaining on active projects (negatives → 0, annual plans capped at 1 year of entitlement, deals closed this quarter excluded)',
+      'Future quarters and fiscal years start from the prior quarter’s ending backlog',
+      'Bookings forecast comes from the Bookings Forecast tab',
+      'People to add = backlog hrs ÷ ' + baFmtH(BA_HRS_PER_PERSON) + ', rounded up, minus headcount entered'
+    ].map(function(t) { return '<li>' + t + '</li>'; }).join('') + '</ul>';
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -7607,7 +7638,7 @@ function buildBacklogPayload(fy, curQLabel, curQRange) {
       var bfAct      = getBfActuals(q, region) || 0;
       var mult       = BA_MULTIPLIERS[region] || 1;
       var estListVal = bfAct * mult;
-      var inYearBook = estListVal * 0.85;
+      var inYearBook = estListVal * BA_IN_YEAR_PCT;
       var incrHrs    = inYearBook / BA_HOURLY_RATE;
       var newBacklog = startBacklog + incrHrs;
       var numCons    = getBaNum(q, region, 'consultants') || 0;
