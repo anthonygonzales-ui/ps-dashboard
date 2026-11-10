@@ -940,7 +940,7 @@ th { position: relative; }
         <div class="tbl-wrap" id="ba-tbl-area">
           <div class="tbl-head">
             <span class="tbl-head-title">Backlog Analysis</span>
-            <span class="tbl-head-sub">Starting backlog auto-calculated from active projects · Bookings pulled from Bookings Forecast tab · # Consultants and # EM are editable</span>
+            <span class="tbl-head-sub">Starting backlog auto-calculated from active projects · Bookings pulled from Bookings Forecast tab · # Consultants and # EM are editable · Capacity = 1,456 billable hrs/person/yr (2,080 hrs × 70% utilization) · Right-hand columns = people to add for Load ≤ 100%</span>
           </div>
           <div class="tbl-scroll">
             <table id="ba-table" style="border-collapse:collapse;white-space:nowrap">
@@ -5024,7 +5024,9 @@ function updateFrozenOffsets(tableId) {
 // Regional list-price multipliers: booked $ → estimated list value
 var BA_MULTIPLIERS = { AMER: 1.22, EMEA: 1.32, APAC: 1.44 };
 // Billable hours per person per year (annual capacity target)
-var BA_HRS_PER_PERSON = 1352;
+// = 2,080 hrs/yr (52 wks × 40 hrs) at the target utilization
+var BA_UTIL_TARGET    = 0.70;
+var BA_HRS_PER_PERSON = 2080 * BA_UTIL_TARGET;   // 1,456
 // Hourly list rate used to convert In Year Bookings → incremental hours
 var BA_HOURLY_RATE = 275;
 // Backlog split: consultant vs EM
@@ -5048,6 +5050,17 @@ function baLoadCell(backlog, capacity) {
   var col = pct > 100 ? 'var(--red)' : pct >= 80 ? 'var(--green)' : 'var(--yellow)';
   var bg  = pct > 100 ? 'rgba(255,68,56,0.1)' : '';
   return '<td style="text-align:right;padding:6px 10px;background:' + bg + ';font-weight:700;color:' + col + '">' + Math.round(pct) + '%</td>';
+}
+// People to add so load is ≤ 100%: ceil(backlog ÷ hrs per person) − current headcount
+function baNeedCount(backlog, have) {
+  var need = Math.ceil(backlog / BA_HRS_PER_PERSON - 1e-9);
+  return Math.max(0, need - (have || 0));
+}
+function baNeedCell(n, extra) {
+  var base = 'text-align:right;padding:6px 10px;' + (extra || '');
+  return n > 0
+    ? '<td style="' + base + ';font-weight:700;color:var(--red)">+' + n + '</td>'
+    : '<td style="' + base + ';color:var(--green)">0</td>';
 }
 // Parse a manual number entry (strips commas)
 function baParseNum(s) {
@@ -5302,6 +5315,8 @@ function renderBacklogAnalysis() {
         '<th style="' + thStyle + '">Consultant<br>Load</th>' +
         '<th style="' + thStyle + '">EM<br>Capacity (hrs)</th>' +
         '<th style="' + thStyle + '">EM<br>Load</th>' +
+        '<th style="' + thStyle + ';border-left:2px solid var(--border)" title="Additional consultants needed for Consultant Load ≤ 100%">+ Consultants<br>to 100%</th>' +
+        '<th style="' + thStyle + '" title="Additional EMs needed for EM Load ≤ 100%">+ EMs<br>to 100%</th>' +
       '</tr>';
   }
 
@@ -5318,9 +5333,11 @@ function renderBacklogAnalysis() {
     var totStart = 0, totBF = 0, totELV = 0, totIYB = 0, totIncrHrs = 0, totNew = 0;
     var totConBack = 0, totEMBack = 0, totConCap = 0, totEMCap = 0;
     var totConCapEff = 0, totEMCapEff = 0;
-    var totCons = 0, totEM = 0;
+    var totCons = 0, totEM = 0, totAddCons = 0, totAddEM = 0;
     regions.forEach(function(region) {
       var d = c[region];
+      totAddCons    += baNeedCount(d.conBacklog, d.numCons);   // summed by region — people aren't shared across regions
+      totAddEM      += baNeedCount(d.emBacklog,  d.numEM);
       totStart      += d.startBacklog;
       totBF         += d.bfActuals;
       totELV        += d.estListVal;
@@ -5354,6 +5371,8 @@ function renderBacklogAnalysis() {
     rows += baLoadCell(totConBack, totConCap);
     rows += '<td style="text-align:right;padding:6px 10px">' + baFmtH(totEMCap)   + '</td>';
     rows += baLoadCell(totEMBack, totEMCap);
+    rows += baNeedCell(totAddCons, 'border-left:2px solid var(--border)');
+    rows += baNeedCell(totAddEM);
     rows += '</tr>';
 
     // Region sub-rows
@@ -5376,6 +5395,8 @@ function renderBacklogAnalysis() {
       rows += baLoadCell(d.conBacklog, d.conCap);
       rows += '<td style="text-align:right;padding:6px 10px;font-size:12px">' + baFmtH(d.emCap)      + '</td>';
       rows += baLoadCell(d.emBacklog, d.emCap);
+      rows += baNeedCell(baNeedCount(d.conBacklog, d.numCons), 'font-size:12px;border-left:2px solid var(--border)');
+      rows += baNeedCell(baNeedCount(d.emBacklog,  d.numEM),   'font-size:12px');
       rows += '</tr>';
     });
   });
