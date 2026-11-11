@@ -5026,8 +5026,12 @@ function updateFrozenOffsets(tableId) {
 // TAB 8 — BACKLOG ANALYSIS
 // ════════════════════════════════════════════════════════════
 
-// Regional list-price multipliers: booked $ → estimated list value
-var BA_MULTIPLIERS = { AMER: 1.22, EMEA: 1.32, APAC: 1.44 };
+// Average regional discount off list price
+var BA_AVG_DISCOUNT = { AMER: 0.15, EMEA: 0.28, APAC: 0.40 };
+// Regional list-price multipliers: booked $ → estimated list value. Recoups the
+// discount: list = booked ÷ (1 − discount), e.g. 15% off → ×1.1765 (+17.65%).
+var BA_MULTIPLIERS = {};
+Object.keys(BA_AVG_DISCOUNT).forEach(function(r) { BA_MULTIPLIERS[r] = 1 / (1 - BA_AVG_DISCOUNT[r]); });
 // Billable hours per person per year (annual capacity target)
 // = 2,080 hrs/yr (52 wks × 40 hrs) at the target utilization
 var BA_UTIL_TARGET    = 0.70;
@@ -5039,8 +5043,7 @@ var BA_CONSULTANT_PCT = 0.75;
 var BA_EM_PCT         = 0.25;
 // Share of estimated list value delivered in-year
 var BA_IN_YEAR_PCT    = 0.85;
-// Planning assumptions shown under the table (not used in the math)
-var BA_AVG_DISCOUNT   = { AMER: 0.15, EMEA: 0.28, APAC: 0.40 };
+// Planning assumption shown under the table (not used in the math)
 var BA_ARR_GROWTH     = 0.25;
 
 // Format whole dollars: 1500000 → "$1,500,000"
@@ -5423,7 +5426,8 @@ function renderBacklogAnalysis() {
       'Utilization target <b>' + pctS(BA_UTIL_TARGET) + '</b> → capacity <b>' + baFmtH(BA_HRS_PER_PERSON) + ' billable hrs/person/yr</b> (2,080 hrs × ' + pctS(BA_UTIL_TARGET) + ')',
       'ARR growth rate <b>' + pctS(BA_ARR_GROWTH) + '</b>',
       'Avg discount: ' + byReg(BA_AVG_DISCOUNT, pctS),
-      'Est. list value multiplier (bookings × multiplier): ' + byReg(BA_MULTIPLIERS, function(v) { return v.toFixed(2) + '×'; }),
+      'Est. list value = bookings ÷ (1 − discount), recouping the discount: ' +
+        byReg(BA_MULTIPLIERS, function(v) { return '+' + ((v - 1) * 100).toFixed(2) + '%'; }),
       'In-year bookings = <b>' + pctS(BA_IN_YEAR_PCT) + '</b> of est. list value',
       'Incremental hours = in-year bookings ÷ <b>$' + BA_HOURLY_RATE + '/hr</b>',
       'Backlog split: <b>' + pctS(BA_CONSULTANT_PCT) + '</b> consultants · <b>' + pctS(BA_EM_PCT) + '</b> EMs',
