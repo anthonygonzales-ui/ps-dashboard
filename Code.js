@@ -27,7 +27,9 @@ var FULL_ACCESS_EMAILS = [
   'anthony.gonzales@redis.com',
   'matthew.jensen@redis.com',
   'steve.jenner@redis.com',
-  'james.harrison@redis.com'
+  'james.harrison@redis.com',
+  'reza@redislabs.com',       // Reza Rahim — old alias (what PS User Records has)
+  'reza@redis.com'            // Reza Rahim — current login
 ];
 var FULL_ACCESS_ORG_ROOT = 'Anil Kondapaneni';
 var LIMITED_TABS = ['active-projects', 'go-lives', 'annual-plan'];
