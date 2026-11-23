@@ -1784,6 +1784,14 @@ function writeKPIsToSheet(kpiArray) {
 var ISRAEL_USERS = [
   'asaf.hirshberg@redis.com'
 ];
+// People in PS User Records who don't submit timecards — never sent a reminder.
+// Emails must be lowercase. Keep in step with UT_EXCLUDED_PEOPLE in index.html.
+var TIMECARD_EXEMPT = [
+  'ryne.fagin@redis.com',
+  'deji.alaran@redis.com',
+  'michael.ehrig@redis.com',
+  'kathleen.mello@redis.com'
+];
 
 function sendMissingTimecardEmails() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -1874,6 +1882,7 @@ function sendMissingTimecardEmails() {
     var ur    = uData[ui];
     var name  = String(ur[iUN]  || '').trim();  if (!name)  continue;
     var email = String(ur[iUE]  || '').trim();  if (!email) { skipped++; continue; }
+    if (TIMECARD_EXEMPT.indexOf(email.toLowerCase()) >= 0) { skipped++; continue; }   // doesn't submit timecards
     var managerEmail = String(ur[iUME] || '').trim();
     var managerName  = iUMN >= 0 ? String(ur[iUMN] || '').trim() : '';
 

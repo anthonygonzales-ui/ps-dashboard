@@ -1079,7 +1079,7 @@ var UT_STRATEGIC_ADMIN = {};
 // Timecards, trend chart, filter options) and the deck's utilization slides —
 // e.g. listed in PS User Records but not part of the team. Full names,
 // case-insensitive.
-var UT_EXCLUDED_PEOPLE = ['Kathleen Mello'];
+var UT_EXCLUDED_PEOPLE = ['Kathleen Mello', 'Ryne Fagin', 'Deji Alaran', 'Michael Ehrig'];   // not on the team / don't submit timecards
 
 // PS User Records with excluded people removed (same { hdrs, data } shape).
 function utRosterSheet() {
@@ -3210,10 +3210,11 @@ function renderUtilization() {
 
   // Manager filter = the selected manager's WHOLE reporting hierarchy: direct
   // reports, their reports, and so on (built from PS User Records Manager Name).
+  // Uses the full sheet so excluded people (e.g. Deji) still link their org chart.
   var mgrScope = null;   // lowercased names in scope, or null = no manager filter
   if (fManager !== 'All') {
     var reportsOf = {};  // manager (lowercase) → [report full names]
-    us.data.forEach(function(r) {
+    (SHEETS.psUserRecords || us).data.forEach(function(r) {
       var n  = iUN >= 0 ? String(r[iUN]||'').trim() : '';
       var mg = mgrOverride[n.toLowerCase()] || (iUM >= 0 ? String(r[iUM]||'').trim() : '');
       if (!n || !mg) return;
