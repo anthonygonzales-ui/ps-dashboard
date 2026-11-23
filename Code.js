@@ -17,6 +17,89 @@ function doGet(e) {
   return output;
 }
 
+// ── DASHBOARD ACCESS ──────────────────────────────────────────
+// Full access (every tab): the people below plus everyone in FULL_ACCESS_ORG_ROOT's
+// reporting hierarchy (walked down the PS User Records "Manager Name" column).
+// Everyone else only gets the Active Projects, Go Lives and Annual Plan / RE tabs,
+// and getAllData only sends them the sheets those tabs use. Emails lowercase.
+var FULL_ACCESS_EMAILS = [
+  'anil.kondapaneni@redis.com',
+  'anthony.gonzales@redis.com',
+  'matthew.jensen@redis.com',
+  'steve.jenner@redis.com',
+  'james.harrison@redis.com'
+];
+var FULL_ACCESS_ORG_ROOT = 'Anil Kondapaneni';
+var LIMITED_TABS = ['active-projects', 'go-lives', 'annual-plan'];
+
+// Emails of everyone under FULL_ACCESS_ORG_ROOT (any depth). Cached 10 min.
+function fullAccessOrgEmails_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('fullAccessOrgEmails');
+  if (hit) return JSON.parse(hit);
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName('PS User Records');
+  if (!sheet) {
+    ss.getSheets().some(function(sh) {
+      if (sh.getLastColumn() < 1) return false;
+      var h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+      if (h.indexOf('Full Name') > -1 && h.indexOf('Manager Name') > -1) { sheet = sh; return true; }
+      return false;
+    });
+  }
+  var emails = [];
+  if (sheet) {
+    var rows = sheet.getDataRange().getValues();
+    var hd = rows[0].map(function(x) { return String(x).trim(); });
+    var iN = hd.indexOf('Full Name'), iM = hd.indexOf('Manager Name'), iE = hd.indexOf('Email');
+    var reportsOf = {};   // manager name (lowercase) → [{name, email}]
+    for (var r = 1; r < rows.length; r++) {
+      var n = String(rows[r][iN] || '').trim(), m = String(rows[r][iM] || '').trim();
+      if (!n || !m) continue;
+      (reportsOf[m.toLowerCase()] = reportsOf[m.toLowerCase()] || [])
+        .push({ name: n, email: iE >= 0 ? String(rows[r][iE] || '').trim().toLowerCase() : '' });
+    }
+    var stack = [FULL_ACCESS_ORG_ROOT.toLowerCase()], seen = {};
+    while (stack.length) {
+      var mk = stack.pop();
+      if (seen[mk]) continue;           // guards against cycles in the data
+      seen[mk] = 1;
+      (reportsOf[mk] || []).forEach(function(p) {
+        if (p.email) emails.push(p.email);
+        stack.push(p.name.toLowerCase());
+      });
+    }
+  }
+  cache.put('fullAccessOrgEmails', JSON.stringify(emails), 600);
+  return emails;
+}
+
+function viewerHasFullAccess_() {
+  var email = insCurrentEmail_();
+  if (!email) return false;
+  if (FULL_ACCESS_EMAILS.indexOf(email) > -1) return true;
+  try { return fullAccessOrgEmails_().indexOf(email) > -1; } catch (e) { return false; }
+}
+
+// Limited viewers only receive the sheets behind LIMITED_TABS. Mirrors the
+// client's identifySheets() header rules for goLive / annualPlan / activeProjects.
+function limitedSheetAllowed_(name, hdrs) {
+  var nameKey = String(name).toLowerCase().replace(/\s+/g, '');
+  if (['bookings','psbookings','psdealsbookings','attachrates','attachrate','psattachrates'].indexOf(nameKey) > -1) return false;
+  var h = hdrs.map(function(x) { return String(x).trim(); });
+  var nc = h.filter(function(x) { return x !== ''; }).length;
+  if (h.indexOf('Actual Go Live Date') > -1 && nc <= 20) return true;                        // Go Lives
+  if (h.indexOf('Utilization Ratio') > -1 && h.indexOf('Health') < 0 && nc <= 35) return true; // Annual Plan
+  if (h.some(function(x) { return x.indexOf('Cloud Usage Rate') > -1; })) return false;
+  if (h.indexOf('Health') > -1 && nc > 20) return true;                                       // Active Projects
+  return false;
+}
+
+// Thrown by server functions that only full-access viewers may call.
+function requireFullAccess_() {
+  if (!viewerHasFullAccess_()) throw new Error('You do not have access to this part of the dashboard.');
+}
+
 /**
  * Returns all sheet data as a JSON string.
  * Called from the frontend via google.script.run.getAllData()
@@ -27,12 +110,16 @@ function getAllData() {
     const sheets = ss.getSheets();
     const result = {};
     const tz = Session.getScriptTimeZone();
+    const full = viewerHasFullAccess_();
 
     sheets.forEach(function (sheet) {
       const name = sheet.getName();
       const lastRow = sheet.getLastRow();
       const lastCol = sheet.getLastColumn();
       if (lastRow < 1 || lastCol < 1) return;
+
+      // Limited viewers: check the header row before reading the whole sheet
+      if (!full && !limitedSheetAllowed_(name, sheet.getRange(1, 1, 1, lastCol).getValues()[0])) return;
 
       const values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
 
@@ -55,6 +142,7 @@ function getAllData() {
     return JSON.stringify({
       success: true,
       data: result,
+      access: { full: full, tabs: full ? null : LIMITED_TABS },
       timestamp: new Date().toISOString()
     });
 
@@ -90,7 +178,9 @@ var INSIGHTS_ALLOWED = [
   'taha.najar@redis.com',
   'kevin.shah@redis.com',
   'ryne.fagin@redis.com',
-  'anthony.gonzales@redis.com'
+  'anthony.gonzales@redis.com',
+  'matthew.jensen@redis.com',
+  'james.harrison@redis.com'
 ];
 
 // The accessing user's email (empty if it can't be determined — e.g. a user in
@@ -103,7 +193,7 @@ function insCurrentEmail_() {
 
 function insIsAllowed_() {
   var email = insCurrentEmail_();
-  return !!email && INSIGHTS_ALLOWED.indexOf(email) > -1;
+  return !!email && INSIGHTS_ALLOWED.indexOf(email) > -1 && viewerHasFullAccess_();
 }
 
 // Called by the client on load to decide whether to show the Insights nav item.
@@ -200,6 +290,7 @@ function askInsights(messagesJson, contextJson) {
  */
 function getHoursData() {
   try {
+    requireFullAccess_();
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheets = ss.getSheets();
     var tz = Session.getScriptTimeZone();
@@ -237,6 +328,7 @@ function getHoursData() {
  */
 function saveBooking(key, value) {
   try {
+    requireFullAccess_();
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName('Bookings Forecast Data');
 
@@ -269,6 +361,7 @@ function saveBooking(key, value) {
  */
 function saveBacklogEntry(key, value) {
   try {
+    requireFullAccess_();
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName('Backlog Analysis Data');
 
@@ -619,6 +712,7 @@ function getCalWeekWindows() {
  */
 function getUserList() {
   try {
+    requireFullAccess_();
     var weeks = getCalWeekWindows();
     var users = readPSUsers();
 
@@ -649,6 +743,7 @@ function getUserList() {
  */
 function getCalendarDataForBatch(batchJson) {
   try {
+    requireFullAccess_();
     var batch   = JSON.parse(batchJson);
     var users   = batch.users;
     var thisMon = new Date(batch.thisMondayMs); thisMon.setHours(0,0,0,0);
@@ -694,6 +789,7 @@ function getCalendarDataForBatch(batchJson) {
  */
 function getCalendarData() {
   try {
+    requireFullAccess_();
     var ulJson = getUserList();
     var ul     = JSON.parse(ulJson);
     if (!ul.success) return ulJson;
@@ -801,6 +897,7 @@ function debugDeclined() {
 function generateSlidesDeck(payloadJson) {
   var _deckSection = 'parse';
   try {
+    requireFullAccess_();
     var p = JSON.parse(payloadJson);
 
     // ── Color constants (Redis brand — white theme) ─────────
@@ -1749,6 +1846,7 @@ function generateSlidesDeck(payloadJson) {
 
 function writeKPIsToSheet(kpiArray) {
   try {
+    requireFullAccess_();
     var TARGET_SS_ID = '1HNr9QtJ_De_ZLQcHx6-rDBgHze3P7InQfFVQGax8Vjg';
     var targetSheet = SpreadsheetApp.openById(TARGET_SS_ID).getSheetByName('PS');
     if (!targetSheet) return JSON.stringify({ success: false, error: 'Sheet "PS" not found in target spreadsheet' });

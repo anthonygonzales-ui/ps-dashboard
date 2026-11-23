@@ -1049,6 +1049,7 @@ window.onerror = function(msg, src, line, col, err) {
 // ════════════════════════════════════════════════════════════
 var SHEETS        = {};    // { activeProjects, goLive, annualPlan, cloudUsage }
 var CUR_TAB       = 'active-projects';
+var DASH_ACCESS   = { full: true, tabs: null };   // set by getAllData; tabs = allowed tab ids when limited
 var SORT          = {};    // per-table sort state
 var CHARTS        = {};    // Chart.js instances
 var BOOKINGS      = {};    // manual bookings forecast data: 'FY_Q_region_field' → raw string value
@@ -1219,6 +1220,7 @@ window.addEventListener('load', function () {
       try {
         var r = JSON.parse(json);
         if (!r.success) throw new Error(r.error || 'Unknown error');
+        if (r.access) DASH_ACCESS = r.access;
         boot(r.data, r.timestamp);
       } catch (e) {
         showErr(e.message);
@@ -1299,17 +1301,43 @@ function boot(raw, ts) {
     });
   })();
 
+  applyTabAccess();
   seedFilters();
   renderCurrentTab();
 
   document.getElementById('loading').style.display = 'none';
   document.getElementById('app').style.display     = 'flex';
 
+  // Limited viewers stop here: no Insights, and no KPI push (they don't have the data).
+  if (!DASH_ACCESS.full) return;
+
   // Reveal the Insights tab only for allow-listed users (server-side gated).
   insCheckAccess();
 
   // Push dashboard-open KPIs to the external tracking sheet
   pushDashboardOpenKPIs();
+}
+
+// Limited viewers (not on the server's full-access list) only see DASH_ACCESS.tabs.
+// The server already withholds the other tabs' data; this just hides their nav
+// items, any section header left empty, and the Generate Deck button.
+function tabAllowed(tab) { return DASH_ACCESS.full || !DASH_ACCESS.tabs || DASH_ACCESS.tabs.indexOf(tab) > -1; }
+function applyTabAccess() {
+  if (DASH_ACCESS.full) return;
+  var nav = document.querySelector('.nav');
+  if (!nav) return;
+  var section = null, sectionHasItem = false;
+  function closeSection() { if (section && !sectionHasItem) section.style.display = 'none'; }
+  Array.from(nav.children).forEach(function(el) {
+    if (el.classList.contains('nav-section')) { closeSection(); section = el; sectionHasItem = false; return; }
+    var m = String(el.getAttribute('onclick') || '').match(/switchTab\('([^']+)'\)/);
+    if (m && !tabAllowed(m[1])) { el.style.display = 'none'; return; }
+    if (el.style.display !== 'none') sectionHasItem = true;
+  });
+  closeSection();
+  var deckBtn = document.querySelector('[onclick="showDeckModal()"]');
+  if (deckBtn) deckBtn.style.display = 'none';
+  if (!tabAllowed(CUR_TAB)) switchTab(DASH_ACCESS.tabs[0]);
 }
 
 // Insights tab is restricted to an allow-list. The nav item is hidden by
@@ -1880,6 +1908,7 @@ function clearF(prefix) {
 // TAB SWITCHING
 // ════════════════════════════════════════════════════════════
 function switchTab(tab) {
+  if (!tabAllowed(tab)) return;
   CUR_TAB = tab;
   var m = TAB_META[tab];
   document.getElementById('tab-title').textContent = m.title;
